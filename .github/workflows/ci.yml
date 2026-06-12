@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    name: typecheck · lint · test · fuzz · eval · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run fuzz # 50k mutated cases against the formal invariants
+      - run: npm run eval # per-class precision/recall
+      - run: npm run build
+
+  inspect-eval:
+    name: Inspect AI eval (citable harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: npm ci --no-audit --no-fund
+      - run: pip install inspect-ai
+      - run: npm run eval:build # engine -> eval/dataset.jsonl
+      - run: inspect eval eval/discrepancy_eval.py --model mockllm/model -T split=all -T seed=1234 --display plain

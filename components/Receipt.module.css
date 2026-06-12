@@ -1,0 +1,407 @@
+/* ============================================================
+   PACIOLI · Receipt component
+   Editorial-ledger × thermal-receipt. Tokens from app/globals.css.
+   Two signature motions: print-feed (.receipt) + stamp (.stamp).
+   ============================================================ */
+
+.receipt {
+  --tear: 14px;
+  width: min(92vw, 384px);
+  font-family: var(--font-mono);
+  color: var(--color-ink);
+  filter: drop-shadow(0 26px 34px rgba(0, 0, 0, 0.5)) drop-shadow(0 3px 6px rgba(0, 0, 0, 0.38));
+  transform: rotate(var(--rot, 0deg));
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: print 0.45s cubic-bezier(0.22, 0.9, 0.25, 1) both;
+}
+.receipt:hover {
+  transform: rotate(0deg) translateY(-3px);
+}
+
+@keyframes print {
+  from {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0.5;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* perforated tear strips — holes punched through to the desk */
+.perf {
+  height: var(--tear);
+  background: radial-gradient(circle at 7px 50%, transparent 0 2.6px, var(--color-paper) 3.1px 100%);
+  background-size: 14px 100%;
+  background-repeat: repeat-x;
+  position: relative;
+  z-index: 1;
+}
+.perfTop {
+  box-shadow: inset 0 2px 0 -1px var(--color-paper-edge);
+}
+.perfBottom {
+  box-shadow: inset 0 -2px 0 -1px var(--color-paper-edge);
+}
+
+.paper {
+  background:
+    radial-gradient(140% 60% at 50% 0%, rgba(255, 255, 255, 0.4), transparent 60%),
+    linear-gradient(180deg, var(--color-paper), var(--color-paper-2));
+  position: relative;
+  padding: 18px 22px 20px;
+  overflow: hidden;
+}
+.paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23p)' opacity='0.4'/></svg>");
+}
+.paper > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* one-shot scanline of printer 'heat' */
+.scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 14px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(42, 38, 34, 0.12), transparent);
+  animation: scan 0.45s cubic-bezier(0.22, 0.9, 0.25, 1) both;
+}
+@keyframes scan {
+  from {
+    transform: translateY(0);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateY(520px);
+    opacity: 0;
+  }
+}
+
+/* ---- head ---- */
+.head {
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--rule);
+}
+.brand {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--color-ink);
+  line-height: 1;
+}
+.brandSup {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--color-ink-2);
+  vertical-align: super;
+}
+.sub {
+  margin-top: 5px;
+  font-size: 8.5px;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+}
+.meta {
+  margin-top: 11px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-2);
+  text-transform: uppercase;
+}
+.agent {
+  margin-top: 9px;
+  display: inline-block;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 3px 9px;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  margin: 15px 0 4px;
+  color: var(--color-ink);
+}
+.ask {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--color-ink-2);
+  letter-spacing: 0.02em;
+  margin-bottom: 13px;
+  font-style: italic;
+}
+
+/* ---- the double-entry ledger ---- */
+.ledger {
+  display: grid;
+  grid-template-columns: 1fr 56px 1fr;
+  position: relative;
+}
+.ledger::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 8px;
+  left: 50%;
+  width: 5px;
+  transform: translateX(-50%);
+  border-left: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
+}
+.colHead {
+  font-size: 8.5px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+  padding-bottom: 9px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--rule);
+}
+.colHeadClaimed {
+  text-align: left;
+}
+.colHeadActual {
+  text-align: right;
+}
+.spine {
+}
+
+.row {
+  display: contents;
+}
+.rowLabel {
+  align-self: center;
+  text-align: center;
+  font-size: 7.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+  padding: 0 4px;
+}
+.cell {
+  padding: 9px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-ink);
+  border-top: 1px dotted var(--rule-soft);
+}
+.row:first-of-type .cell {
+  border-top: none;
+}
+.cellClaimed {
+  text-align: left;
+  padding-right: 14px;
+  color: var(--color-ink-2);
+}
+.cellActual {
+  text-align: right;
+  padding-left: 14px;
+}
+
+/* a flagged (mismatched) actual cell */
+.flag {
+  color: var(--color-ink);
+}
+.flag .val {
+  color: var(--color-oxblood);
+  font-weight: 600;
+}
+.flag::before {
+  content: "⚑";
+  color: var(--color-oxblood);
+  font-size: 10px;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.was {
+  color: var(--color-ink-2);
+  font-size: 9.5px;
+  display: block;
+  margin-top: 2px;
+}
+
+/* abductive "likely cause" line */
+.cause {
+  margin-top: 11px;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  line-height: 1.45;
+  color: var(--color-ink-2);
+  text-align: center;
+  font-style: italic;
+}
+.cause b {
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 8px;
+  color: var(--color-ink-3);
+}
+
+/* hero money numbers */
+.money {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+}
+.moneyOver {
+  color: var(--color-oxblood);
+  font-weight: 700;
+}
+
+/* ---- balance line ---- */
+.balance {
+  margin-top: 16px;
+  padding: 13px 14px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+.mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1.5px solid currentColor;
+}
+.balLab {
+  font-size: 9px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+.balDet {
+  color: var(--color-ink-2);
+}
+.balanceOk {
+  color: var(--color-ledger-green);
+  background: linear-gradient(180deg, rgba(30, 94, 58, 0.1), rgba(30, 94, 58, 0.04));
+  border: 1px solid rgba(30, 94, 58, 0.3);
+}
+.balanceOut {
+  color: var(--color-oxblood);
+  background: linear-gradient(180deg, rgba(138, 45, 45, 0.12), rgba(138, 45, 45, 0.05));
+  border: 1px solid rgba(138, 45, 45, 0.32);
+}
+
+/* ---- the stamp ---- */
+.stamp {
+  position: absolute;
+  top: 62px;
+  right: 16px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  padding: 5px 9px 4px;
+  text-align: center;
+  line-height: 1.1;
+  transform: rotate(-5deg);
+  opacity: 0.92;
+  animation: stamp 0.22s cubic-bezier(0.2, 0.9, 0.4, 1) both;
+  animation-delay: 0.34s;
+}
+.stampOut {
+  color: var(--color-oxblood);
+  border: 2px solid var(--color-oxblood);
+  box-shadow:
+    inset 0 0 0 1px rgba(138, 45, 45, 0.3),
+    inset 0 0 9px rgba(138, 45, 45, 0.18);
+  background: repeating-linear-gradient(48deg, rgba(138, 45, 45, 0.05) 0 3px, transparent 3px 7px);
+}
+.stampOk {
+  color: var(--color-ledger-green);
+  border: 2px solid var(--color-ledger-green);
+  box-shadow:
+    inset 0 0 0 1px rgba(30, 94, 58, 0.3),
+    inset 0 0 9px rgba(30, 94, 58, 0.16);
+  background: repeating-linear-gradient(48deg, rgba(30, 94, 58, 0.05) 0 3px, transparent 3px 7px);
+}
+.stamp b {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.stamp span {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 0.18em;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+@keyframes stamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-5deg) scale(1.15);
+  }
+  100% {
+    opacity: 0.92;
+    transform: rotate(-5deg) scale(1);
+  }
+}
+
+/* ---- barcode footer ---- */
+.barcode {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--rule);
+}
+.bars {
+  height: 36px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-ink) 0 2px,
+    transparent 2px 4px,
+    var(--color-ink) 4px 5px,
+    transparent 5px 8px,
+    var(--color-ink) 8px 11px,
+    transparent 11px 12px,
+    var(--color-ink) 12px 13px,
+    transparent 13px 17px
+  );
+  opacity: 0.84;
+}
+.code {
+  margin-top: 7px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  color: var(--color-ink-2);
+}

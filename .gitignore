@@ -1,0 +1,42 @@
+# ── dependencies ──
+/node_modules
+/.pnp
+.pnp.*
+
+# ── next.js / build output ──
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# ── testing / coverage ──
+/coverage
+
+# ── inspect eval logs (python) ──
+__pycache__/
+*.pyc
+.venv/
+/logs/
+
+# ── env & secrets ──  (commit .env.example only)
+.env*
+!.env.example
+*.pem
+
+# ── vercel ──
+.vercel
+
+# ── os / editor / debug ──
+.DS_Store
+npm-debug.log*
+*.log
+
+# ── provenance firewall: real captured runs are personal data and never ship ──
+dataset/captured.jsonl
+
+# ── scratch screenshots (keep deliberate assets in public/) ──
+/screenshots/
+
+# ── fetched third-party benchmark data (MIT; fetched on demand, not redistributed) ──
+bench/tau2/.cache/

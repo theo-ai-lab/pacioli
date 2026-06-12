@@ -1,0 +1,48 @@
+{
+  "name": "pacioli",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "eval": "tsx lib/engine/eval.ts",
+    "eval:build": "tsx lib/engine/build-inspect-dataset.ts",
+    "fuzz": "tsx lib/engine/fuzz-cli.ts",
+    "audit": "tsx lib/report/audit-cli.ts",
+    "mcp": "tsx mcp/server.ts",
+    "bench:tau2": "tsx bench/tau2/run.ts",
+    "bench:perf": "tsx bench/perf.ts",
+    "bench:ale": "tsx bench/ale/run.ts",
+    "capture": "node dataset/capture/capture.mjs",
+    "capture:validate": "node dataset/capture/validate.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ai": "^6.0.197",
+    "next": "16.2.7",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.7",
+    "tailwindcss": "^4",
+    "tsx": "^4.22.4",
+    "typescript": "^5",
+    "vitest": "^4.1.8"
+  }
+}

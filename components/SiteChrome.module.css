@@ -1,0 +1,131 @@
+/* Shared masthead + footer. Tokens from app/globals.css. */
+
+.masthead {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 40px 28px 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid rgba(236, 229, 214, 0.14);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.monogram {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  position: relative;
+  border: 1.5px solid var(--color-cream);
+  border-radius: 3px;
+}
+/* the double-entry split: two ledger columns + a rule */
+.monogram::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent calc(50% - 1px),
+      var(--color-cream) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    linear-gradient(
+      0deg,
+      transparent calc(50% - 0.5px),
+      rgba(236, 229, 214, 0.5) calc(50% - 0.5px) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    );
+}
+
+.wordmark {
+  line-height: 0.95;
+}
+.title {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: clamp(24px, 4vw, 32px);
+  letter-spacing: 0.02em;
+  color: var(--color-cream);
+}
+.tag {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--color-cream-dim);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.nav a {
+  color: var(--color-cream-dim);
+  text-decoration: none;
+  padding-bottom: 3px;
+  border-bottom: 1px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.nav a:hover {
+  color: var(--color-cream);
+  border-color: var(--color-cream);
+}
+
+/* ---------------- footer ---------------- */
+.footer {
+  max-width: 1120px;
+  margin: 64px auto 0;
+  padding: 26px 28px 56px;
+  border-top: 1px solid rgba(236, 229, 214, 0.12);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-cream-dim);
+}
+.footer a {
+  color: var(--color-cream-dim);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(236, 229, 214, 0.25);
+}
+.footer a:hover {
+  color: var(--color-cream);
+}
+.lat {
+  font-family: var(--font-serif);
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 12px;
+  color: #bdb295;
+}
+
+@media (max-width: 620px) {
+  .masthead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

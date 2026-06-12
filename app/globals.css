@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* ============================================================
+   PACIOLI · design tokens (Tailwind v4 CSS-first @theme)
+   The contract of DESIGN.md, expressed as utilities + variables.
+   AA-verified pairs; never pure #000 / #fff.
+   ============================================================ */
+@theme {
+  /* fonts — wired from next/font variables set on <html> in layout.tsx */
+  --font-serif: var(--font-spectral), "Hoefler Text", Baskerville, Palatino, Georgia, serif;
+  --font-mono: var(--font-plex-mono), "SF Mono", "SFMono-Regular", Menlo, Monaco, monospace;
+
+  /* desk — the dark ledger surface */
+  --color-desk: #1a1714;
+  --color-desk-2: #211c18;
+  --color-cream: #ece5d6;
+  --color-cream-dim: #a89e8a;
+
+  /* paper — warm bone ledger stock */
+  --color-paper: #f4efe3;
+  --color-paper-2: #ece4d3;
+  --color-paper-edge: #ddd2ba;
+
+  /* ink */
+  --color-ink: #2a2622;
+  --color-ink-2: #5c5346;
+  --color-ink-3: #8a7e6b;
+
+  /* the only two semantic colors */
+  --color-ledger-green: #1e5e3a;
+  --color-ledger-green-deep: #184f35;
+  --color-oxblood: #8a2d2d;
+  --color-oxblood-bright: #a23a30;
+}
+
+/* non-utility design variables (rules, textures) */
+:root {
+  --rule: rgba(42, 38, 34, 0.22);
+  --rule-soft: rgba(42, 38, 34, 0.12);
+  --desk-line: rgba(150, 165, 140, 0.05);
+}
+
+/* ---------------- the desk surface ---------------- */
+/* overflow-x on html as well as body: iOS Safari ignores body-only overflow-x, and the
+   Z-Report's deliberate -0.6deg paper tilt pokes its bounding box ~1px past narrow viewports. */
+html {
+  overflow-x: clip;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--color-cream);
+  font-family: var(--font-serif);
+  background-color: var(--color-desk);
+  background-image:
+    radial-gradient(120% 90% at 50% -10%, rgba(40, 52, 38, 0.22), transparent 60%),
+    radial-gradient(140% 120% at 50% 120%, rgba(0, 0, 0, 0.45), transparent 55%),
+    repeating-linear-gradient(0deg, var(--desk-line) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, var(--desk-line) 0 1px, transparent 1px 26px),
+    linear-gradient(180deg, var(--color-desk-2), var(--color-desk));
+  background-attachment: fixed;
+  position: relative;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* film grain — static, decorative; safe to keep under reduced motion */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ---------------- focus: cream ring clears 3:1 on every surface ----------------
+   Cream (#ECE5D6) is ~14:1 on the dark desk where all interactive elements live
+   (oxblood would be only ~2.7:1 there — below WCAG 2.2 SC 1.4.11). */
+:focus-visible {
+  outline: 2px solid var(--color-cream);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ---------------- reduced motion: decorative motion off, info intact ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* tabular numerals everywhere a number is set in mono */
+.tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+}

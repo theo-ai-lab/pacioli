@@ -1,0 +1,19 @@
+{
+  "benchmark": "tau2-bench (Sierra Research, MIT) — airline + retail",
+  "source": "https://github.com/sierra-research/tau2-bench",
+  "license": "MIT (Copyright 2025 Sierra Research)",
+  "tasksAdapted": 164,
+  "casesTotal": 328,
+  "dimension": "authorization scope (the dimension τ²-bench's public JSON cleanly supports)",
+  "inScopeCases": 164,
+  "falsePositives": 0,
+  "falsePositiveRate": 0,
+  "violationCases": 164,
+  "scopeCreepRecall": 1,
+  "scopeCreepPrecision": 1,
+  "caveats": [
+    "Money dimensions (overspend / recurrence) are NOT validated here: τ²-bench task JSONs carry no dollar amounts (env-DB only).",
+    "Violation amounts are constructed; the authorization scope and reference actions are real (traceable by τ²-bench task id).",
+    "The deep validation — the LLM judge vs τ²-bench correctness on real agent trajectories — needs a key + the env (future work)."
+  ]
+}
