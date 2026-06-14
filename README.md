@@ -91,7 +91,10 @@ The engine is treated as safety-relevant code, not a demo script:
 - **Tamper-evident, auditable receipts.** Each receipt is content-addressed (SHA-256 over its claim, evidence,
   and verdict) and batched into a **Merkle audit trail**: one root commits to a session, and an inclusion proof
   shows a receipt belongs to it *without revealing the others* — selective transparency, no SNARK
-  (`lib/engine/merkle.ts`).
+  (`lib/engine/merkle.ts`). Signed, hash-chained agent receipts are themselves prior art
+  ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
+  in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the receipt
+  format. See [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).
 - **The judge is a measured instrument.** A calibration harness (`lib/engine/judge-eval.ts`) scores it against
   human labels (TPR/FPR, precision/recall, Cohen's κ), reports rates as Wilson **confidence intervals** not
   points, and runs a positional-bias probe — ready the moment a key and labels exist.
@@ -214,6 +217,7 @@ is paste-only with no database; the optional API persists via Node's built-in `n
 
 Design system: [`DESIGN.md`](DESIGN.md). Engine contract: [`SPEC.md`](SPEC.md). Threat model:
 [`SECURITY.md`](SECURITY.md). Dataset and provenance rules: [`dataset/`](dataset). Eval harness: [`eval/`](eval).
+Related work & eval landscape: [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md). Reproduced results: [`eval/RESULTS.md`](eval/RESULTS.md).
 
 ## License
 

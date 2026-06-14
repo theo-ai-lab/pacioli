@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "eval": "tsx lib/engine/eval.ts",
+    "calibrate": "tsx lib/engine/calibrate-cli.ts",
     "eval:build": "tsx lib/engine/build-inspect-dataset.ts",
     "fuzz": "tsx lib/engine/fuzz-cli.ts",
     "audit": "tsx lib/report/audit-cli.ts",
