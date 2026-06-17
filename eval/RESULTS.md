@@ -49,6 +49,6 @@ real `self-run`/`gmail` captures against a live card and is pending on purpose.
 - `npm run bench:tau2` → 164 τ²-bench tasks: **0/164 false positives** on in-scope trajectories — a
   specificity check; money dimensions are not validated and violation amounts are constructed (see
   [`bench/tau2/results.json`](../bench/tau2/results.json)).
-- `npm test` → 36 files, **145 passed / 2 skipped**.
+- `npm test` → 44 files, **203 passed / 2 skipped**.
 
 Reproduce everything: `npm test && npm run eval && npm run fuzz && npm run bench:tau2`.

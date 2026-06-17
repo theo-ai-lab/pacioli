@@ -18,6 +18,13 @@
 
 import { diff } from "./diff";
 import { genInput, mulberry32 } from "./fuzz";
+import {
+  reconcileStream,
+  streamFromDiffInput,
+  type InfoClass,
+  type ReconcileOptions,
+  type VerdictClass,
+} from "./prefix-reconcile";
 import type { DiffInput } from "./types";
 
 const fires = (i: DiffInput, t: string): boolean => diff(i).findings.some((f) => f.type === t);
@@ -111,3 +118,108 @@ export const METAMORPHIC_PROPERTIES = [
   "MP-ADDON-MONOTONE",
   "MP-RECUR-DOMINANCE",
 ] as const;
+
+// ── RECON-MR — monotone-safety of the prefix reconciler's EARLY COMMIT ──────────────────────────
+//
+//   RECON-MR — a verdict COMMITTED on a prefix MUST NOT flip to the opposite class once later
+//              evidence arrives. A flip is a violation.
+//
+// This is a metamorphic relation OVER A STREAM rather than over a single transformed input: it
+// explodes a base case into an arrival stream (lib/engine/prefix-reconcile.streamFromDiffInput),
+// runs the reconciler, and checks that every prefix at/after the commit point keeps the committed
+// class. Under the default "safe" policy (commit only when information-complete) this holds by
+// construction — the fuzzer is the EMPIRICAL proof that the dominance check has no hole. Under the
+// "stable-k" heuristic policy a flip CAN occur (that is the point of the negative test): the harness
+// must be able to DETECT it, exactly like the broken-engine mock proves the MP-* relations bite.
+//
+// Fuzzed over the SAME generator as the MP-* relations (genInput / mulberry32), with the reveal
+// order itself drawn from the generator so many arrival sequences are exercised.
+
+export const RECON_MR = "RECON-MR" as const;
+
+export interface ReconMrViolation {
+  property: typeof RECON_MR;
+  detail: string;
+}
+
+/**
+ * Check RECON-MR for a single base case: build its arrival stream, reconcile, and report a
+ * violation iff a committed class later flipped to the opposite class. `order`/`rng` choose the
+ * reveal order; `reconcile` chooses the policy (default the monotone-safe one).
+ */
+export function reconMrViolations(
+  base: DiffInput,
+  opts: { rng?: () => number; order?: InfoClass[]; reconcile?: ReconcileOptions } = {},
+): ReconMrViolation[] {
+  const stream = streamFromDiffInput(base, { rng: opts.rng, order: opts.order });
+  const run = reconcileStream(stream, opts.reconcile ?? { policy: "safe" });
+  if (run.commitAt === null || run.heldToEnd) return [];
+  const flipped = run.steps.slice(run.commitAt).find((s) => s.verdictClass !== run.committedClass);
+  return [
+    {
+      property: RECON_MR,
+      detail: `committed ${run.committedClass} at step ${run.commitAt}, then flipped to ${
+        flipped?.verdictClass
+      } at step ${flipped?.step}`,
+    },
+  ];
+}
+
+export interface ReconMrResult {
+  cases: number;
+  seed: number;
+  policy: string;
+  /** Cases where the policy committed at all. */
+  commits: number;
+  /** Cases where it committed STRICTLY before the stream ended (a genuine early commit). */
+  earlyCommits: number;
+  /** Cases that committed by information-completeness (the monotone-safe reason). */
+  infoCompleteCommits: number;
+  failures: Array<{ index: number; input: DiffInput; class: VerdictClass | null; violations: ReconMrViolation[] }>;
+}
+
+/** Fuzz RECON-MR over generated inputs (reveal order drawn from the same stream). */
+export function fuzzReconMr(
+  cases = 10_000,
+  seed = 1234,
+  reconcile: ReconcileOptions = { policy: "safe" },
+): ReconMrResult {
+  const r = mulberry32(seed);
+  const failures: ReconMrResult["failures"] = [];
+  let commits = 0;
+  let earlyCommits = 0;
+  let infoCompleteCommits = 0;
+
+  for (let index = 0; index < cases; index++) {
+    const input = genInput(r);
+    const stream = streamFromDiffInput(input, { rng: r }); // shuffled reveal order from the generator
+    const run = reconcileStream(stream, reconcile);
+
+    if (run.commitAt !== null) commits++;
+    if (run.committedEarly) earlyCommits++;
+    if (run.committedReason === "information-complete") infoCompleteCommits++;
+
+    if (run.commitAt !== null && !run.heldToEnd) {
+      const flipped = run.steps.slice(run.commitAt).find((s) => s.verdictClass !== run.committedClass);
+      failures.push({
+        index,
+        input,
+        class: run.committedClass,
+        violations: [
+          {
+            property: RECON_MR,
+            detail: `committed ${run.committedClass} at step ${run.commitAt}, flipped to ${
+              flipped?.verdictClass
+            } at step ${flipped?.step}`,
+          },
+        ],
+      });
+    }
+  }
+
+  return { cases, seed, policy: reconcile.policy ?? "safe", commits, earlyCommits, infoCompleteCommits, failures };
+}
+
+/** The full named relation set, including the streaming RECON-MR relation. (METAMORPHIC_PROPERTIES is
+ *  left unchanged so existing consumers/counters are untouched; this is the additive superset.) */
+export const ALL_METAMORPHIC_PROPERTIES = [...METAMORPHIC_PROPERTIES, RECON_MR] as const;

@@ -71,6 +71,9 @@ export async function POST(req: Request): Promise<Response> {
         merchant: res.body.merchant,
         deltaUsd: res.body.deltaUsd,
         createdAt: Date.now(),
+        // ADDITIVE: optional per-user/session partition, carried in a header so the validated body
+        // is untouched. Length-capped; absent header = the shared global ledger (prior behavior).
+        sessionKey: req.headers.get("x-pacioli-session")?.slice(0, 200) || undefined,
       });
     } catch {
       /* best-effort persistence */

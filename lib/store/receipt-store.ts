@@ -19,6 +19,10 @@ export interface StoredReceipt {
    *  idempotent by content (replaying identical claim+evidence IS the same receipt), but each replay
    *  still counts as an event — otherwise the metrics counter would silently collapse repeats. */
   seenCount?: number;
+  /** OPTIONAL per-user/session partition key (additive). When set, the receipt also belongs to a
+   *  caller-scoped ledger queryable via listBySession/statsBySession. Untrusted; treated only as an
+   *  opaque, parameter-bound value (never interpolated into SQL). Omitted = the shared global ledger. */
+  sessionKey?: string;
 }
 
 export interface StoreStats {
@@ -36,6 +40,11 @@ export interface ReceiptStore {
   get(id: string): StoredReceipt | null;
   list(limit?: number): StoredReceipt[];
   stats(): StoreStats;
+  /** ADDITIVE: the most recent receipts recorded under a session/user key, newest first. The
+   *  per-user ledger surface (/api/ledger?session=…) reads this. Empty for an unknown key. */
+  listBySession(sessionKey: string, limit?: number): StoredReceipt[];
+  /** ADDITIVE: the same aggregate as stats(), scoped to one session/user key. */
+  statsBySession(sessionKey: string): StoreStats;
 }
 
 function computeStats(rows: StoredReceipt[]): StoreStats {
@@ -72,6 +81,12 @@ export function createMemoryStore(): ReceiptStore {
     get: (id) => rows.find((r) => r.receiptId === id) ?? null,
     list: (limit = 100) => rows.slice(-limit).reverse(),
     stats: () => computeStats(rows),
+    listBySession: (sessionKey, limit = 100) =>
+      rows
+        .filter((r) => r.sessionKey === sessionKey)
+        .slice(-limit)
+        .reverse(),
+    statsBySession: (sessionKey) => computeStats(rows.filter((r) => r.sessionKey === sessionKey)),
   };
 }
 
@@ -98,6 +113,7 @@ const toRow = (o: Record<string, unknown>): StoredReceipt => ({
   deltaUsd: o.deltaUsd === null || o.deltaUsd === undefined ? null : Number(o.deltaUsd),
   createdAt: Number(o.createdAt),
   seenCount: Number(o.seenCount ?? 1),
+  sessionKey: o.sessionKey === null || o.sessionKey === undefined ? undefined : String(o.sessionKey),
 });
 
 /** Build a node:sqlite-backed store, or null if the runtime/module isn't available. */
@@ -109,6 +125,16 @@ export async function tryCreateSqliteStore(path: string): Promise<ReceiptStore |
       `CREATE TABLE IF NOT EXISTS receipts (receiptId TEXT PRIMARY KEY, receiptHash TEXT, balanced INTEGER,
        findingTypes TEXT, agent TEXT, merchant TEXT, deltaUsd REAL, createdAt INTEGER, seenCount INTEGER NOT NULL DEFAULT 1)`,
     );
+    // ADDITIVE MIGRATION: a DB created before per-session support has no sessionKey column. CREATE TABLE
+    // IF NOT EXISTS won't add it, so add it idempotently (older rows get NULL = global ledger). The
+    // partial index keeps the session-scoped reads fast without touching the global query path.
+    const hasSessionKey = (db.prepare(`PRAGMA table_info(receipts)`).all() as Array<{ name?: unknown }>).some(
+      (c) => String(c.name) === "sessionKey",
+    );
+    if (!hasSessionKey) db.exec(`ALTER TABLE receipts ADD COLUMN sessionKey TEXT`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_receipts_session ON receipts (sessionKey, createdAt DESC) WHERE sessionKey IS NOT NULL`,
+    );
     const trim = db.prepare(
       `DELETE FROM receipts WHERE rowid IN (
          SELECT rowid FROM receipts ORDER BY createdAt ASC, rowid ASC
@@ -119,10 +145,23 @@ export async function tryCreateSqliteStore(path: string): Promise<ReceiptStore |
       // Content-addressed upsert: a replay of the same receipt bumps seenCount (the event counter)
       // and keeps the FIRST createdAt — an audit log records when something was first seen.
       save: (r) => {
+        // Explicit column list (was positional) so the additive sessionKey column binds correctly and
+        // a future column can't silently shift the bind order. Replay still only bumps seenCount.
         db.prepare(
-          `INSERT INTO receipts VALUES (?,?,?,?,?,?,?,?,1)
+          `INSERT INTO receipts (receiptId, receiptHash, balanced, findingTypes, agent, merchant, deltaUsd, createdAt, seenCount, sessionKey)
+           VALUES (?,?,?,?,?,?,?,?,1,?)
            ON CONFLICT(receiptId) DO UPDATE SET seenCount = seenCount + 1`,
-        ).run(r.receiptId, r.receiptHash, r.balanced ? 1 : 0, r.findingTypes.join(","), r.agent, r.merchant, r.deltaUsd, r.createdAt);
+        ).run(
+          r.receiptId,
+          r.receiptHash,
+          r.balanced ? 1 : 0,
+          r.findingTypes.join(","),
+          r.agent,
+          r.merchant,
+          r.deltaUsd,
+          r.createdAt,
+          r.sessionKey ?? null,
+        );
         trim.run(); // bounded retention — prunes oldest rows past SQLITE_CAP
       },
       get: (id) => {
@@ -134,6 +173,27 @@ export async function tryCreateSqliteStore(path: string): Promise<ReceiptStore |
       stats: () => {
         // Narrow projection — stats only needs three columns, not every row hauled through toRow().
         const rows = db.prepare(`SELECT balanced, findingTypes, seenCount FROM receipts`).all() as Record<string, unknown>[];
+        const byType: Record<string, number> = {};
+        let flagged = 0;
+        let events = 0;
+        for (const o of rows) {
+          events += Number(o.seenCount ?? 1);
+          if (o.balanced !== 1) flagged++;
+          if (o.findingTypes) for (const t of String(o.findingTypes).split(",").filter(Boolean)) byType[t] = (byType[t] ?? 0) + 1;
+        }
+        return { total: rows.length, events, flagged, byType };
+      },
+      listBySession: (sessionKey, limit = 100) =>
+        (
+          db
+            .prepare(`SELECT * FROM receipts WHERE sessionKey = ? ORDER BY createdAt DESC LIMIT ?`)
+            .all(sessionKey, limit) as Record<string, unknown>[]
+        ).map(toRow),
+      statsBySession: (sessionKey) => {
+        // Same narrow projection as stats(), filtered to one session key (parameter-bound, never interpolated).
+        const rows = db
+          .prepare(`SELECT balanced, findingTypes, seenCount FROM receipts WHERE sessionKey = ?`)
+          .all(sessionKey) as Record<string, unknown>[];
         const byType: Record<string, number> = {};
         let flagged = 0;
         let events = 0;
