@@ -46,7 +46,7 @@ export const ReconcileBody = z.object({
 /** One claim in a BATCH request: the same per-claim fields as the single body, minus the shared
  *  evidence + judge selector (those are declared once at the top level and held against every claim). */
 const ClaimEntry = z.object({
-  /** Caller-supplied stable id, echoed back so the Coach can map a verdict to its source claim. */
+  /** Caller-supplied stable id, echoed back so the caller can map a verdict to its source claim. */
   id: z.string().max(120).optional(),
   agent: z.string().max(120).default("api"),
   task: z.string().max(2000),
@@ -55,7 +55,7 @@ const ClaimEntry = z.object({
 });
 
 /** The BATCH body — N claims reconciled against ONE shared body of evidence. This is the seam a
- *  multi-claim caller (e.g. the Career Coach grading a set of résumé claims against one evidence
+ *  multi-claim caller (e.g. a front-end grading a set of claims against one evidence
  *  packet) uses; each claim gets its own deterministic verdict + receipt. */
 export const ReconcileBatchBody = z.object({
   claims: z.array(ClaimEntry).min(1).max(100),

@@ -5,7 +5,7 @@
  *   • SINGLE — `{ task, claim, authorized?, evidence, judge? }` → one verdict + tamper-evident receipt.
  *   • BATCH  — `{ claims: [{ id?, task, claim, authorized? }, …], evidence, judge? }` → a per-claim
  *              supported / unsupported / overclaim verdict against ONE shared body of evidence. This is
- *              the seam a multi-claim caller (e.g. the Career Coach) uses; pick the batch path whenever
+ *              the seam a multi-claim caller (e.g. a browser front-end) uses; pick the batch path whenever
  *              the body carries a `claims` array.
  *
  * Zero new dependencies (Next App Router built-in). Optional shared-secret (set PACIOLI_API_KEY to
@@ -23,7 +23,7 @@ import { corsHeaders, corsPreflight } from "@/lib/api/cors";
 import { checkJudgeRate } from "@/lib/ratelimit";
 import { getStore, type StoredReceipt } from "@/lib/store/receipt-store";
 
-/** CORS preflight for cross-origin callers (the Coach in a browser). */
+/** CORS preflight for cross-origin callers (a browser front-end). */
 export async function OPTIONS(req: Request): Promise<Response> {
   return corsPreflight(req);
 }

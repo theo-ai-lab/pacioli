@@ -1,8 +1,8 @@
 /**
  * Pacioli — CORS for the cross-origin /api/reconcile seam.
  *
- * The reconcile endpoint is meant to be called from another origin (e.g. the Career Coach running in a
- * browser), so it answers the CORS preflight and echoes the allow-* headers on every response.
+ * The reconcile endpoint is meant to be called from another origin (e.g. a separate front-end running in
+ * a browser), so it answers the CORS preflight and echoes the allow-* headers on every response.
  *
  * Default is open ("*"): the route carries NO cookies/ambient credentials — authentication is the
  * explicit `x-api-key` header — so a wildcard origin cannot be abused via the browser's credentialed-

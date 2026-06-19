@@ -86,7 +86,7 @@ describe("POST /api/reconcile — transport security behaviors", () => {
   });
 });
 
-describe("POST /api/reconcile — CORS (cross-origin browser callers, e.g. the Coach)", () => {
+describe("POST /api/reconcile — CORS (cross-origin browser callers)", () => {
   it("answers the preflight with 204 + allow-* headers", async () => {
     const res = await OPTIONS(new Request(URL_, { method: "OPTIONS", headers: { origin: "https://coach.example" } }));
     expect(res.status).toBe(204);
