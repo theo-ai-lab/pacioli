@@ -208,9 +208,9 @@ The engine is treated as safety-relevant code, not a demo script:
   coverage **39.6% → 54.2%** and the residual judge-call rate **60.4% → 45.8%** at a **24% replaceable
   fraction** (20% out-of-sample). The jury reports **correlation-corrected effective votes** (2.58 of 4, not
   the member count — a chorus of clones cannot manufacture consensus), and every promoted rule is
-  Merkle-receipted with its full jury-consensus provenance (`npm run distill`; `lib/engine/{jury,distill,
-  distill-receipt}.ts`). With a key, `--judge` seeds a real LLM jury; with none it falls back to the keyless
-  mock and says so.
+  Merkle-receipted with its full jury-consensus provenance (`npm run distill`;
+  `lib/engine/{jury,distill,distill-receipt}.ts`). With a key, `--judge` seeds a real LLM jury; with none it
+  falls back to the keyless mock and says so.
 - **A selective-risk certificate on the residual judge.** A selective judge abstains on the claims it is
   unsure of and commits a verdict only on a confident *accepted* region; its **selective risk** is its error
   rate there. Pacioli prints a **distribution-free upper confidence bound** on that risk for unseen claims —
