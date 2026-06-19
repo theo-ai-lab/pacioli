@@ -186,6 +186,16 @@ The engine is treated as safety-relevant code, not a demo script:
   ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
   in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the receipt
   format. See [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).
+- **The deterministic fast path is falsifiable.** Trusting the cheap rules and escalating only the residual
+  to the LLM judge should give the *same verdict* as running the judge on everything — so Pacioli measures it,
+  it doesn't assume it. **Over 48 labeled fixtures the deterministic tier resolves 40% of claims with zero
+  escalation and a verdict provably identical to judge-on-everything — 0 lossless violations, versus 25 for
+  the deliberately lossy never-escalate baseline — at zero model spend** (`npm run reconcile -- --equivalence`).
+  The equivalence relation (EQUIV-CASCADE; regime model-free → model-based, residual locus the claim) is
+  committed into the same Merkle audit trail as the receipts it summarizes, so the claim is itself
+  tamper-evident. The same CLI ships a keyless sample-k saturation curve (`--saturation`) and a
+  conformal-calibrated residual band (`--conformal`) — both deterministic, both zero model spend
+  (`lib/engine/cascade.ts`).
 - **The judge is a measured instrument.** A calibration harness (`lib/engine/judge-eval.ts`) scores it against
   human labels (TPR/FPR, precision/recall, Cohen's κ), reports rates as Wilson **confidence intervals** not
   points, and runs a positional-bias probe — ready the moment a key and labels exist.

@@ -18,6 +18,7 @@
     "eval:build": "tsx lib/engine/build-inspect-dataset.ts",
     "fuzz": "tsx lib/engine/fuzz-cli.ts",
     "audit": "tsx lib/report/audit-cli.ts",
+    "reconcile": "tsx lib/engine/reconcile-cli.ts",
     "reconcile:pr": "tsx lib/adapters/pr-reconcile-cli.ts",
     "mcp": "tsx mcp/server.ts",
     "steward": "tsx agent/index.ts",
