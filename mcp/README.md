@@ -56,7 +56,7 @@ The same surface is available on the command line: `npm run reconcile:pr -- --ga
 
 ```bash
 npm run mcp          # stdio
-npx tsx mcp/smoke.ts # end-to-end self-check (spawns the server, lists tools, calls reconcile_claim)
+npx tsx mcp/smoke.ts # end-to-end self-check (spawns the server, lists tools, calls all three)
 ```
 
 ## CLI
