@@ -22,6 +22,7 @@
     "mcp": "tsx mcp/server.ts",
     "steward": "tsx agent/index.ts",
     "steward:demo": "tsx agent/index.ts",
+    "steward:governed": "tsx agent/governor-demo.ts",
     "bench:tau2": "tsx bench/tau2/run.ts",
     "bench:perf": "tsx bench/perf.ts",
     "bench:ale": "tsx bench/ale/run.ts",

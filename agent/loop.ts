@@ -22,6 +22,7 @@ import { diff } from "../lib/engine/diff";
 import { buildReceipt } from "../lib/engine/receipt";
 import type { Authorization, DiffInput, FindingType, MerchantEvidence, Verdict } from "../lib/engine/types";
 import { cancelSubscription, listPlans, subscribe, type CommerceClient, type Plan } from "./tools";
+import type { GovernorGate, ProposedToolCall } from "./governor";
 
 // ── Goal ──────────────────────────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,9 @@ export interface StewardContext {
   plans: Plan[];
   /** Prior attempts and their reconcile verdicts (so the model can avoid ruled-out options). */
   history: Attempt[];
+  /** Plan ids the PRE-ACT governor refused before they could run (never charged). A model should treat
+   *  these like ruled-out options. Always present (empty when no governor is wired). */
+  blockedPlanIds: string[];
 }
 
 /** Inject a real LLM policy (anthropicStewardModel) or the deterministic stub (scriptedStewardModel). */
@@ -84,6 +88,10 @@ export interface StepTrace {
   findingTypes?: FindingType[];
   /** Whether the loop remediated (canceled) an out-of-balance action. */
   remediated?: boolean;
+  /** True iff the PRE-ACT governor refused this step — the tool call was NEVER executed (no charge). */
+  governorBlocked?: boolean;
+  /** Plimsoll rule_ids that blocked the call (when governorBlocked). */
+  governorRules?: string[];
   note: string;
 }
 
@@ -112,11 +120,17 @@ export async function runSteward(opts: {
   client: CommerceClient;
   /** Safety net: max loop iterations before forced escalation. Defaults to the catalog size + 3. */
   maxSteps?: number;
+  /** OPTIONAL pre-act gate (Plimsoll's deterministic governor). Consulted BEFORE each commerce tool
+   *  call; on deny the call is NEVER executed — the plan is ruled out and the loop self-corrects to a
+   *  permitted option (or escalates). Absent ⇒ prior behavior, no gate. This is the genuine, live
+   *  cross-tool integration: a provable deterministic floor under the agent's actions. */
+  governor?: GovernorGate;
 }): Promise<StewardResult> {
-  const { goal, model, client } = opts;
+  const { goal, model, client, governor } = opts;
   const trace: StepTrace[] = [];
   const history: Attempt[] = [];
   const attempted = new Set<string>();
+  const blockedPlanIds: string[] = [];
   let corrections = 0;
 
   // Fetch the catalog over the HTTP-shaped seam (one real request).
@@ -128,7 +142,7 @@ export async function runSteward(opts: {
   }
 
   for (let step = 1; step <= maxSteps; step++) {
-    const action = await model.decide({ goal, plans, history });
+    const action = await model.decide({ goal, plans, history, blockedPlanIds });
 
     // The model can give up directly when it sees no viable option.
     if (action.type === "escalate") {
@@ -148,6 +162,36 @@ export async function runSteward(opts: {
       return escalated(goal, trace, `model repeated a ruled-out option (${plan.id}); no progress`, step, corrections);
     }
     attempted.add(plan.id);
+
+    // ── PRE-ACT GOVERNOR GATE: ask Plimsoll's deterministic governor whether this tool call MAY run,
+    //    BEFORE any charge. On deny the call is not executed; we rule the plan out and self-correct.
+    //    This is the complement to the post-act reconcile conscience below: the governor stops the
+    //    knowable-bad call up front; reconcile catches what only the evidence reveals (e.g. drip fees).
+    if (governor) {
+      const proposed: ProposedToolCall = {
+        tool: "subscribe",
+        estimated_cost_usd: plan.priceUsd,
+        input: { planId: plan.id },
+      };
+      const decision = await governor.check(proposed);
+      if (!decision.allowed) {
+        corrections++;
+        blockedPlanIds.push(plan.id);
+        const why = decision.blockingRules.join(", ") || decision.reason;
+        trace.push({
+          step,
+          action,
+          charged: null,
+          balanced: false,
+          governorBlocked: true,
+          governorRules: decision.blockingRules,
+          note:
+            `GOVERNOR ${decision.outcome === "unavailable" ? "UNAVAILABLE → fail-closed" : "DENIED"} (${why}) — ` +
+            `'${plan.name}' ($${plan.priceUsd}/${plan.period}) NOT executed; self-correcting`,
+        });
+        continue;
+      }
+    }
 
     // EXECUTE the action. The idempotency key ties this (plan, step) attempt to a single charge.
     const tool = await subscribe(client, { planId: plan.id, idempotencyKey: `steward:${plan.id}:${step}` });
@@ -247,15 +291,19 @@ function escalated(goal: Goal, trace: StepTrace[], reason: string, steps: number
 export function scriptedStewardModel(opts?: { preference?: "cheapest" | "priciest" }): StewardModel {
   const pref = opts?.preference ?? "cheapest";
   return {
-    async decide({ goal, plans, history }: StewardContext): Promise<StewardAction> {
+    async decide({ goal, plans, history, blockedPlanIds }: StewardContext): Promise<StewardAction> {
+      // Rule out plans the reconcile conscience flagged AND plans the pre-act governor refused —
+      // both are real feedback the agent must not ignore.
       const ruledOut = new Set(history.filter((a) => !a.verdict.balanced).map((a) => a.planId));
+      for (const id of blockedPlanIds) ruledOut.add(id);
       const candidates = plans
         .filter((p) => !ruledOut.has(p.id))
         .sort((a, b) => (pref === "cheapest" ? a.priceUsd - b.priceUsd : b.priceUsd - a.priceUsd));
       if (candidates.length === 0) {
+        const gated = blockedPlanIds.length ? " / blocked by the governor" : "";
         return {
           type: "escalate",
-          reason: `every plan was ruled out by reconcile under the $${goal.authorized.budgetUsd} budget`,
+          reason: `every plan was ruled out by reconcile${gated} under the $${goal.authorized.budgetUsd} budget`,
         };
       }
       return { type: "subscribe", planId: candidates[0].id, rationale: `${pref} remaining plan` };

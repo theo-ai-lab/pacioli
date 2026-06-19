@@ -24,6 +24,7 @@
 
 export * from "./tools";
 export * from "./loop";
+export * from "./governor";
 export { anthropicStewardModel, stewardModelEnabled, STEWARD_MODEL } from "./model-anthropic";
 
 import { createMockCommerceClient } from "./tools";

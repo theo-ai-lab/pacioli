@@ -1,0 +1,5 @@
+{
+  "allowed_tools": ["list_plans", "subscribe", "cancel_subscription"],
+  "forbidden_tools": ["wire_transfer", "delete_account"],
+  "max_estimated_cost_usd": 20.0
+}

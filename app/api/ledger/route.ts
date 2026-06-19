@@ -2,10 +2,10 @@
  * Pacioli — GET /api/ledger. The per-user/session receipt ledger (additive product surface).
  *
  * Reads the durable store (lib/store/receipt-store.ts). With `?session=<key>` it returns ONLY the
- * receipts recorded under that session/user key (write the same key on /api/reconcile via the
- * `x-pacioli-session` header); without it, the shared global ledger — so the endpoint is additive
- * and the un-scoped view keeps working. Honors PACIOLI_API_KEY when configured, exactly like
- * /api/metrics: an operator who sets a key reasonably expects it to cover the whole API surface.
+ * receipts recorded under that session/user key (send the same key on the write routes — /api/reconcile
+ * and /api/ingest — via the `x-pacioli-session` header); without it, the shared global ledger — so the
+ * endpoint is additive and the un-scoped view keeps working. Honors PACIOLI_API_KEY when configured,
+ * exactly like /api/metrics: an operator who sets a key reasonably expects it to cover the whole API surface.
  *
  * Zero new dependencies (Next App Router built-in). Deterministic; no LLM, no key needed.
  */

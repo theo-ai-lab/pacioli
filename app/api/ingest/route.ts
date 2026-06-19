@@ -82,8 +82,9 @@ export async function POST(req: Request): Promise<Response> {
         merchant: res.body.merchant,
         deltaUsd: res.body.deltaUsd,
         createdAt: Date.now(),
-        // ADDITIVE: per-user partition, carried in a header so the validated body is untouched.
-        // Length-capped; absent header = the shared global ledger (same convention as /api/reconcile).
+        // ADDITIVE: per-user partition, carried in the `x-pacioli-session` header so the validated body
+        // is untouched (the same header /api/reconcile reads). Length-capped; absent = the shared global
+        // ledger. Read it back via GET /api/ledger?session=<key>.
         sessionKey: req.headers.get("x-pacioli-session")?.slice(0, 200) || undefined,
       });
     } catch {

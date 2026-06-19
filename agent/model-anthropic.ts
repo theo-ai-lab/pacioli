@@ -79,7 +79,7 @@ export function anthropicStewardModel(opts?: { model?: string; apiKey?: string }
 }
 
 function buildPrompt(ctx: StewardContext): string {
-  const { goal, plans, history } = ctx;
+  const { goal, plans, history, blockedPlanIds } = ctx;
   const planLines = plans
     .map((p) => `- ${p.id}: ${p.name} — $${p.priceUsd}/${p.period}`)
     .join("\n");
@@ -94,6 +94,10 @@ function buildPrompt(ctx: StewardContext): string {
         })
         .join("\n")
     : "(none yet)";
+  // The pre-act governor refused these before they could run — they are off the table, do not retry.
+  const blockedLine = blockedPlanIds.length
+    ? `GOVERNOR-BLOCKED PLANS (a deterministic pre-act gate refused these — never choose them): ${blockedPlanIds.join(", ")}`
+    : "GOVERNOR-BLOCKED PLANS: (none)";
 
   return [
     `GOAL: ${goal.description}`,
@@ -105,6 +109,8 @@ function buildPrompt(ctx: StewardContext): string {
     "",
     "PRIOR ATTEMPTS (reconcile verdicts — your conscience):",
     historyLines,
+    "",
+    blockedLine,
     "",
     "Decide the next action.",
   ].join("\n");

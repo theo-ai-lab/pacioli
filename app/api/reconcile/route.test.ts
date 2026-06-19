@@ -8,7 +8,7 @@ vi.mock("@/lib/engine/local-judge", () => ({
   fence: (s: string, max = 600) => s.replace(/[<>]/g, " ").slice(0, max),
 }));
 
-import { POST } from "./route";
+import { OPTIONS, POST } from "./route";
 
 const URL_ = "http://test.local/api/reconcile";
 const valid = {
@@ -83,5 +83,82 @@ describe("POST /api/reconcile — transport security behaviors", () => {
     const sixth = await post(JSON.stringify({ ...valid, judge: "local" }), h);
     expect(sixth.status).toBe(429);
     expect(sixth.headers.get("retry-after")).toBeTruthy();
+  });
+});
+
+describe("POST /api/reconcile — CORS (cross-origin browser callers, e.g. the Coach)", () => {
+  it("answers the preflight with 204 + allow-* headers", async () => {
+    const res = await OPTIONS(new Request(URL_, { method: "OPTIONS", headers: { origin: "https://coach.example" } }));
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*"); // open by default (no credentials)
+    expect(res.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(res.headers.get("access-control-allow-headers")).toContain("x-api-key");
+  });
+
+  it("echoes the allow-origin header on the POST response too", async () => {
+    const res = await post(JSON.stringify(valid));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("honors a PACIOLI_CORS_ORIGIN allowlist (matching origin echoed, with Vary)", async () => {
+    process.env.PACIOLI_CORS_ORIGIN = "https://coach.example,https://app.example";
+    try {
+      const res = await OPTIONS(
+        new Request(URL_, { method: "OPTIONS", headers: { origin: "https://app.example" } }),
+      );
+      expect(res.headers.get("access-control-allow-origin")).toBe("https://app.example");
+      expect(res.headers.get("vary")).toBe("Origin");
+      const denied = await OPTIONS(
+        new Request(URL_, { method: "OPTIONS", headers: { origin: "https://evil.example" } }),
+      );
+      // A non-allowlisted origin gets the first configured origin, never the attacker's.
+      expect(denied.headers.get("access-control-allow-origin")).toBe("https://coach.example");
+    } finally {
+      delete process.env.PACIOLI_CORS_ORIGIN;
+    }
+  });
+});
+
+describe("POST /api/reconcile — batch (claims array)", () => {
+  const batch = {
+    claims: [
+      { id: "tight", task: "book under $300", claim: "booked", authorized: { budgetUsd: 300, mayPurchase: true } },
+      { id: "loose", task: "book under $500", claim: "booked", authorized: { budgetUsd: 500, mayPurchase: true } },
+    ],
+    evidence: { merchant: "United", amountUsd: 378 },
+  };
+
+  it("returns a per-claim supported/overclaim verdict + summary, and persists each receipt", async () => {
+    const res = await post(JSON.stringify(batch), { "x-pacioli-session": "sess-batch-1" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const b = (await res.json()) as {
+      merchant: string;
+      judgeMode: string;
+      claims: Array<{ id: string; status: string; balanced: boolean; receiptId: string }>;
+      summary: { total: number; supported: number; unsupported: number; overclaim: number };
+    };
+    expect(b.merchant).toBe("United");
+    expect(b.claims.map((c) => c.id)).toEqual(["tight", "loose"]);
+    expect(b.claims.find((c) => c.id === "tight")?.status).toBe("overclaim");
+    expect(b.claims.find((c) => c.id === "loose")?.status).toBe("supported");
+    expect(b.summary).toEqual({ total: 2, supported: 1, unsupported: 0, overclaim: 1 });
+
+    // The per-claim receipts landed in the session ledger.
+    const { GET } = await import("../ledger/route");
+    const ledger = await GET(new Request("http://test.local/api/ledger?session=sess-batch-1"));
+    const lj = (await ledger.json()) as { total: number; receipts: Array<{ receiptId: string }> };
+    expect(lj.total).toBe(2);
+  });
+
+  it("422s a batch with an empty claims array", async () => {
+    expect((await post(JSON.stringify({ claims: [], evidence: { merchant: "U" } }))).status).toBe(422);
+  });
+
+  it("refuses judge selection for unauthenticated batch callers (judgeMode 'unauthorized')", async () => {
+    const res = await post(JSON.stringify({ ...batch, judge: "local" }));
+    const b = (await res.json()) as { judgeMode: string };
+    expect(b.judgeMode).toBe("unauthorized");
   });
 });
