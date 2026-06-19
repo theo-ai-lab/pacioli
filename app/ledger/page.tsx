@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { IncidentCard } from "@/components/IncidentCard";
+import { SessionLedger } from "@/components/SessionLedger";
 import { loadIncidents } from "@/lib/engine/dataset";
 import type { GroundTruthSample } from "@/lib/engine/types";
 
 export const metadata: Metadata = {
-  title: "The Ledger Report",
+  title: "Your Ledger · The Ledger Report",
   description:
-    "Documented, source-cited cases where an AI agent's claim diverged from what actually happened — Air Canada, Replit, the $1 Tahoe, Mata v. Avianca — rendered as receipts.",
+    "Forward a confirmation and watch it reconcile into your own receipt ledger — then the Ledger Report: documented, source-cited cases where an AI agent's claim diverged from what actually happened (Air Canada, Replit, the $1 Tahoe, Mata v. Avianca), rendered as receipts.",
 };
 
 // Curation policy: resolved/adjudicated cases are featured; cases still in active
@@ -32,7 +33,10 @@ export default function LedgerPage() {
     <>
       <SiteHeader />
       <main className="mx-auto w-full max-w-[1180px] px-7 pt-14 pb-4">
-        <div className="mx-auto max-w-2xl text-center">
+        {/* The live product loop: forward a confirmation → reconcile → review your own receipt ledger. */}
+        <SessionLedger />
+
+        <div className="mx-auto mt-16 max-w-2xl text-center">
           <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-cream-dim">The Ledger Report</p>
           <h1 className="mt-4 font-serif text-[clamp(30px,5vw,48px)] font-medium leading-[1.06] tracking-tight text-cream">
             Real agents. Real failures.

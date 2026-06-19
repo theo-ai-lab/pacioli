@@ -12,7 +12,7 @@ subscribed — against what the **evidence** shows, and prints a receipt when th
 > Spend trackers show you what was charged. Pacioli proves whether your agent told you the truth.
 
 **[Live demo → pacioliapp.vercel.app](https://pacioliapp.vercel.app)** — paste a claim + a confirmation, get the receipt.
-**[/methods](https://pacioliapp.vercel.app/methods)** is the per-class eval · **[/ledger](https://pacioliapp.vercel.app/ledger)** is real, source-cited failures as receipts · or run it locally in 30 seconds ([below](#run-it-locally)).
+**[/methods](https://pacioliapp.vercel.app/methods)** is the per-class eval · **[/ledger](https://pacioliapp.vercel.app/ledger)** is the live **record → reconcile → review** loop (forward a confirmation, watch it file into your own receipt ledger) plus real, source-cited failures as receipts · or run it locally in 30 seconds ([below](#run-it-locally)).
 
 ---
 
@@ -108,11 +108,15 @@ The engine is treated as safety-relevant code, not a demo script:
 
 Pacioli ships a [Model Context Protocol](https://modelcontextprotocol.io) server, so an agent (Claude Desktop,
 the Claude CLI) can call it **mid-task** to self-issue a receipt — double-entry bookkeeping in the loop, not just
-post-hoc. One read-only `reconcile_claim` tool over the same deterministic engine. See [`mcp/`](mcp).
+post-hoc. Three read-only tools over the same deterministic engine: `reconcile_claim` (one-shot), plus
+`reconcile_pr` and `reconcile_stream` for evidence that arrives **incrementally** (a PR's diff stats → CI, or a
+confirmation that lands field by field) — they report the earliest prefix at which a verdict is monotone-safe to
+commit (flag an oversized agent PR as `OVERSPEND` before CI even finishes). See [`mcp/`](mcp).
 
 ```bash
-npm run mcp                # stdio
-npx tsx mcp/smoke.ts       # end-to-end self-check
+npm run mcp                                # stdio (tools: reconcile_claim, reconcile_pr, reconcile_stream)
+npx tsx mcp/smoke.ts                       # end-to-end self-check
+npm run reconcile:pr -- --gate < pr.json   # the PR adapter as a CLI gate — exit 1 on a flagged agent PR
 ```
 
 ## Wire it into your pipeline
