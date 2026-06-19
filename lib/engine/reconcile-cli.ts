@@ -1,15 +1,21 @@
 /**
- * Pacioli — the reconcile CLI: cascade-equivalence, sample-k saturation, and the conformal residual band.
+ * Pacioli — the reconcile CLI: cascade-equivalence, sample-k saturation, the conformal residual band,
+ * judge→floor distillation, and the residual judge's selective-risk certificate.
  *
  *   npm run reconcile -- --equivalence [--policy trust-on-resolve|trust-all] [--judge auto|local|anthropic]
  *   npm run reconcile -- --saturation
  *   npm run reconcile -- --conformal [--alpha 0.1]
+ *   npm run reconcile -- --distill   [--judge auto|local|anthropic] [--seed N]
+ *   npm run reconcile -- --certify   [--judge auto|local|anthropic] [--delta 0.05]
  *
  * DEFAULT IS KEYLESS. `--equivalence` runs the deterministic-vs-deterministic regression with the
  * GOLD-ORACLE judge (the human labels stand in for a perfect expensive tier) — zero model spend, the CI
  * path. The full judge-equivalence CALIBRATION (does the REAL judge respect the no-overturn assumption
  * the lossless guarantee rests on?) is the one-time GATED pass: pass `--judge anthropic|local|auto`; with
  * no key / no Ollama it is SKIPPED honestly and the keyless gold-oracle regression runs in its place.
+ *
+ * `--distill` and `--certify` both default to the KEYLESS mock JURY (jury.ts); `--judge` seeds a REAL jury
+ * from the distinct available backends and falls back honestly to the mock when fewer than two exist.
  */
 
 import { diff } from "./diff";
@@ -35,6 +41,17 @@ import {
   splitCalibTest,
   type LabeledScore,
 } from "./conformal";
+import {
+  mockJury,
+  runJury,
+  seedRealJury,
+  isHighConsensusMismatch,
+  DEFAULT_CONSENSUS_GATE,
+  type Juror,
+} from "./jury";
+import { applyPromotedRules, distillRules } from "./distill";
+import { buildPromotionLedger, provePromotion, verifyPromotionInclusion } from "./distill-receipt";
+import { certifySelectiveRisk, widthVsN, type SelectiveItem } from "./selective-risk";
 import type { DiffInput, GroundTruthSample } from "./types";
 
 const args = process.argv.slice(2);
@@ -167,9 +184,146 @@ function runConformal(): void {
   );
 }
 
+/** Resolve the JURY: a REAL panel from the distinct available backends if `--judge` is given AND ≥2 exist,
+ *  else the keyless mock jury (honest fallback, never a fabricated or padded panel). */
+async function resolveJury(): Promise<{ jurors: Juror[]; label: string; note: string }> {
+  const sel = value("--judge");
+  if (sel) {
+    const seed = await seedRealJury();
+    if (seed.isJury) return { jurors: seed.jurors, label: `real (${seed.available.join("+")})`, note: seed.note };
+    console.log(`\n  NOTE: --judge ${sel} requested but ${seed.note}.\n  Running the KEYLESS mock jury instead (zero model spend).`);
+  }
+  return {
+    jurors: mockJury(),
+    label: "mock (keyless)",
+    note: "4 facet jurors reading distinct facets of the keyless proxy — a synthetic sizing instrument, not a real model",
+  };
+}
+
+async function runDistill(): Promise<void> {
+  const all = corpus();
+  const residual = all.filter(isResidual);
+  const { jurors, label, note } = await resolveJury();
+  const consensus = await runJury(jurors, residual.map((r) => r.input));
+  const seed = Number(value("--seed", "7"));
+  const result = distillRules(residual, consensus, all.length, { splitSeed: seed });
+
+  console.log("\nPacioli — DISTILL THE JUDGE INTO THE DETERMINISTIC FLOOR (jury → holdout-gated → promoted rule)");
+  console.log(`\n  jury     : ${label} — ${note}`);
+  console.log(
+    `             m=${consensus.m} jurors, mean pairwise correlation ρ̄=${consensus.meanPairwiseCorrelation.toFixed(3)}, ` +
+      `effectiveJurors=${consensus.effectiveJurors.toFixed(2)} (correlation-corrected, NOT the member count)`,
+  );
+  console.log(`  residual : ${result.n} claims the deterministic tier abstains on; split derivation ${result.derivationN} / holdout ${result.holdoutN} (seed ${seed})`);
+
+  console.log("\n  candidate atoms — PROPOSE on the jury's high-consensus agreements, DISPOSE on GOLD out of sample:");
+  for (const c of result.candidates) {
+    const verdict = c.promoted ? "PROMOTED" : c.derivation.passed ? "REJECTED" : "not proposed";
+    console.log(`\n    ${c.atom}  →  ${verdict}`);
+    console.log(
+      `        derivation: explains ${c.derivation.agreedMismatch}/${c.derivation.firesOn} of its fires as high-consensus agreements` +
+        ` (precision ${c.derivation.precision == null ? "n/a" : pct(c.derivation.precision)}); proposed=${c.derivation.passed}`,
+    );
+    console.log(`        holdout   : ${c.holdout.reason}`);
+    console.log(`        why       : ${c.explanation}`);
+  }
+
+  console.log(`\n  PROMOTED into the always-on deterministic ruleset: ${result.promoted.length} rule(s)`);
+  for (const p of result.promoted) console.log(`    ${p.ruleId}  (${p.type})`);
+
+  const r = result.replaceable;
+  const cov = result.coverage;
+  console.log("\n  REPLACEABLE FRACTION — the judge calls the deterministic floor now absorbs:");
+  console.log(`    out-of-sample (holdout) estimate : ${pct(r.replaceableFractionHoldout)}  (${r.holdoutResolved} of ${r.holdoutN} held-out residual rows)`);
+  console.log(`    operational (full residual)      : ${pct(r.replaceableFractionFull)}  (${r.fullResolved} of ${result.n} residual rows)`);
+  console.log(`    deterministic coverage           : ${pct(cov.deterministicCoverageBefore)} → ${pct(cov.deterministicCoverageAfter)}  (of all ${cov.corpusN} labeled claims)`);
+  console.log(`    residual judge-call rate         : ${pct(cov.residualJudgeRateBefore)} → ${pct(cov.residualJudgeRateAfter)}`);
+  console.log(
+    "\n  HONEST READ: the out-of-sample holdout number is the defensible one; the operational number is what the\n" +
+      "  shipped ruleset catches on this corpus. Only rules that hit the GOLD precision floor on a slice they were\n" +
+      "  NOT derived from are promoted — a candidate the jury agreed on but gold rejects out of sample is dropped.",
+  );
+
+  // Merkle-commit the promoted ruleset into the audit trail.
+  const ledger = await buildPromotionLedger(result.promoted);
+  console.log(`\n  promotion ledger Merkle root ${ledger.root.slice(0, 16)}… (${result.promoted.length} leaf/leaves)`);
+  if (result.promoted.length > 0) {
+    const proof = await provePromotion(ledger, 0);
+    const ok = await verifyPromotionInclusion(ledger.leaves[0], proof, ledger.root);
+    console.log(`  inclusion proof for ${result.promoted[0].ruleId} verifies: ${ok}`);
+  }
+}
+
+async function runCertify(): Promise<void> {
+  const all = corpus();
+  const residual = all.filter(isResidual);
+  const delta = Number(value("--delta", "0.05"));
+  const { jurors, label, note } = await resolveJury();
+  const consensus = await runJury(jurors, residual.map((r) => r.input));
+
+  console.log("\nPacioli — SELECTIVE-RISK CERTIFICATE on the residual judge (distribution-free, conformal route)");
+  console.log(
+    "\n  cite: Akter, Shihab & Sharma, \"Selective Risk Certification for LLM Outputs via Information-Lift\n" +
+      "        Statistics\" (arXiv:2509.12527, 2025). Their route is a sub-gamma PAC-Bayes information-lift\n" +
+      "        bound; we take the distribution-free EXACT-BINOMIAL (Clopper–Pearson) route because at N in the\n" +
+      "        tens a PAC-Bayes constant printed as a headline would be vacuous.",
+  );
+  console.log(`\n  jury : ${label} — ${note}`);
+  console.log(`         effectiveJurors=${consensus.effectiveJurors.toFixed(2)} of ${consensus.m} (correlation-corrected, ρ̄=${consensus.meanPairwiseCorrelation.toFixed(3)})`);
+
+  // The residual judge COMMITS a CLAIM_MISMATCH flag on its high-consensus region and ABSTAINS elsewhere.
+  // Selective risk = its error (false-discovery) rate on the claims it commits a flag on.
+  const goldCM = (r: GroundTruthSample): boolean => (r.target.findings ?? []).some((f) => f.type === "CLAIM_MISMATCH");
+  const items: SelectiveItem[] = consensus.rows.map((row, i) => ({
+    predicted: true, // a committed flag asserts CLAIM_MISMATCH
+    gold: goldCM(residual[i]),
+    accepted: isHighConsensusMismatch(row, consensus, DEFAULT_CONSENSUS_GATE),
+  }));
+  const cert = certifySelectiveRisk(items, delta);
+
+  console.log("\n  the residual judge COMMITS a CLAIM_MISMATCH flag on its high-consensus region and ABSTAINS otherwise.");
+  console.log("  selective risk = its error (false-discovery) rate on the claims it commits a flag on:");
+  console.log(`\n    accepted (committed flags) : ${cert.nAccepted} of ${cert.nTotal} residual claims  (selective coverage ${pct(cert.coverage)})`);
+  console.log(`    observed errors            : ${cert.errors}  (empirical selective risk ${pct(cert.empiricalRisk)})`);
+  console.log(`    certified upper bound      : ${pct(cert.upperBound)} at ${pct(1 - cert.delta)} confidence  [Clopper–Pearson exact binomial]`);
+  console.log(`    cross-check (Hoeffding)    : ${pct(cert.hoeffdingUpper)}`);
+  console.log(`    certificate WIDTH          : ${(cert.width * 100).toFixed(1)} points above the point estimate`);
+
+  console.log(`\n  CONVERGENCE — the certificate WIDTH shrinks as the gold set grows (holding empirical risk at ${pct(cert.empiricalRisk)}):`);
+  console.log("     N        certified upper bound     width");
+  for (const w of widthVsN(cert.empiricalRisk, undefined, delta)) {
+    console.log(`   ${String(w.n).padStart(5)}      ${pct(w.upperBound).padEnd(22)}    ${(w.width * 100).toFixed(1)}`);
+  }
+
+  // A corollary tie-in to distillation: the distilled deterministic floor's committed verdicts are
+  // themselves certifiable (0 observed errors, but an honestly-wide small-N bound).
+  const distilled = distillRules(residual, consensus, all.length);
+  if (distilled.promoted.length > 0) {
+    const floorItems: SelectiveItem[] = residual.map((r) => {
+      const fires = applyPromotedRules(r.input, distilled.promoted).length > 0;
+      return { predicted: true, gold: goldCM(r), accepted: fires };
+    });
+    const floorCert = certifySelectiveRisk(floorItems, delta);
+    console.log(
+      `\n  corollary — the DISTILLED floor's committed verdicts: ${floorCert.errors} error(s) on ${floorCert.nAccepted} committed row(s) ` +
+        `→ certified selective risk ≤ ${pct(floorCert.upperBound)} OOS (honestly wide at small N).`,
+    );
+  }
+
+  console.log(
+    "\n  HONEST READ: distribution-free, CONDITIONAL on exchangeability — NOT a tight number at N in the tens.\n" +
+      `  At N=${cert.nAccepted} the ${pct(1 - cert.delta)} upper bound (${pct(cert.upperBound)}) sits far above the ${pct(cert.empiricalRisk)} we observed: an honest\n` +
+      "  small-N certificate is WIDE, and we never headline it as the judge's accuracy. The METHODOLOGY and the\n" +
+      "  O(1/√N) width curve are the deliverable; the keyless mock jury is a sizing instrument — swap in a real\n" +
+      "  keyed jury with --judge for a measurement of an actual model.",
+  );
+}
+
 async function main(): Promise<void> {
   if (flag("--saturation")) return runSaturation();
   if (flag("--conformal")) return runConformal();
+  if (flag("--distill")) return runDistill();
+  if (flag("--certify")) return runCertify();
   // default + explicit --equivalence
   await runEquivalence();
 }

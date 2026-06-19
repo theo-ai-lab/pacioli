@@ -196,6 +196,31 @@ The engine is treated as safety-relevant code, not a demo script:
   tamper-evident. The same CLI ships a keyless sample-k saturation curve (`--saturation`) and a
   conformal-calibrated residual band (`--conformal`) — both deterministic, both zero model spend
   (`lib/engine/cascade.ts`).
+- **The judge distills into the deterministic floor — holdout-gated.** Some of the residual is structurally
+  obvious (the merchant evidence literally says "booked a connecting flight *instead*"). Pacioli runs a judge
+  **jury** over the residual, and where the jury reaches a high-consensus agreement it *distills* that into a
+  candidate deterministic rule — but only PROMOTES the rule if it predicts the **ground-truth label out of
+  sample**: each candidate is **holdout-gated** on a slice it was not derived from and must hit the gold
+  precision floor, or it is rejected. The jury can be *fooled* (a clean claim that merely sounds suspicious);
+  the gold holdout gate is the stronger check that catches it and drops the rule. Over the 48 labeled
+  fixtures the keyless mock jury promotes one rule (`evidence-divergence-language`), **rejects a second**
+  that the jury agreed on but gold disproves out of sample, and never proposes a third — moving deterministic
+  coverage **39.6% → 54.2%** and the residual judge-call rate **60.4% → 45.8%** at a **24% replaceable
+  fraction** (20% out-of-sample). The jury reports **correlation-corrected effective votes** (2.58 of 4, not
+  the member count — a chorus of clones cannot manufacture consensus), and every promoted rule is
+  Merkle-receipted with its full jury-consensus provenance (`npm run distill`; `lib/engine/{jury,distill,
+  distill-receipt}.ts`). With a key, `--judge` seeds a real LLM jury; with none it falls back to the keyless
+  mock and says so.
+- **A selective-risk certificate on the residual judge.** A selective judge abstains on the claims it is
+  unsure of and commits a verdict only on a confident *accepted* region; its **selective risk** is its error
+  rate there. Pacioli prints a **distribution-free upper confidence bound** on that risk for unseen claims —
+  the exact-binomial (Clopper–Pearson) route, distribution-free conditional on exchangeability. This is the
+  selective-risk-certification framing of [Akter, Shihab & Sharma (arXiv:2509.12527)](https://arxiv.org/abs/2509.12527);
+  we deliberately take the distribution-free binomial route rather than print a PAC-Bayes constant, because
+  **at N in the tens an honest bound is WIDE, not a headline.** With one observed error in ten confident
+  flags the 95% bound is ~39% (vs a 10% point estimate) — so the deliverable is the **methodology and the
+  convergence**: the certificate WIDTH shrinks as O(1/√N), displayed as a width-vs-N curve, and we never
+  quote the small-N number as the judge's accuracy (`npm run certify`; `lib/engine/selective-risk.ts`).
 - **The judge is a measured instrument.** A calibration harness (`lib/engine/judge-eval.ts`) scores it against
   human labels (TPR/FPR, precision/recall, Cohen's κ), reports rates as Wilson **confidence intervals** not
   points, and runs a positional-bias probe — ready the moment a key and labels exist.
