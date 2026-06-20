@@ -188,7 +188,7 @@ The engine is treated as safety-relevant code, not a demo script:
   format. See [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).
 - **The deterministic fast path is falsifiable.** Trusting the cheap rules and escalating only the residual
   to the LLM judge should give the *same verdict* as running the judge on everything — so Pacioli measures it,
-  it doesn't assume it. **Over 48 labeled fixtures the deterministic tier resolves 40% of claims with zero
+  it doesn't assume it. **Over 48 labeled fixtures the deterministic tier resolves ~40% of claims with zero
   escalation and a verdict provably identical to judge-on-everything — 0 lossless violations, versus 25 for
   the deliberately lossy never-escalate baseline — at zero model spend** (`npm run reconcile -- --equivalence`).
   The equivalence relation (EQUIV-CASCADE; regime model-free → model-based, residual locus the claim) is
