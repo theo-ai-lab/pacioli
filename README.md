@@ -12,50 +12,9 @@ subscribed — against what the **evidence** shows, and prints a receipt when th
 > Spend trackers show you what was charged. Pacioli proves whether your agent told you the truth.
 
 **[Live demo → pacioliapp.vercel.app](https://pacioliapp.vercel.app)** — paste a claim + a confirmation, get the receipt.
-**[/methods](https://pacioliapp.vercel.app/methods)** is the per-class eval · **[/ledger](https://pacioliapp.vercel.app/ledger)** is real, source-cited failures as receipts · or run it locally in 30 seconds ([below](#run-it-locally)).
+**[/methods](https://pacioliapp.vercel.app/methods)** is the per-class eval · **[/ledger](https://pacioliapp.vercel.app/ledger)** is the live **record → reconcile → review** loop (forward a confirmation, watch it file into your own receipt ledger) plus real, source-cited failures as receipts · or run it locally in 30 seconds ([below](#run-it-locally)).
 
 ---
-
-## The one idea
-
-"What the agent claimed" versus "what actually happened" is **prediction versus ground truth**. So the
-reconciliation engine isn't something an eval is bolted onto — it *is* an eval, and it's measured like one:
-per-class precision/recall over a labeled set, deterministic rules first, every LLM judgment marked.
-
-## The measured result
-
-The deterministic engine, scored against the labeled fixtures. Precision is high where the engine commits,
-because the rules are exact. Recall is the honest story.
-
-| class | precision | recall | read |
-|---|---:|---:|---|
-| `OVERSPEND` | 1.00 | 0.92 | exact — a budget delta is a number |
-| `UNAUTH_RECURRENCE` | 1.00 | 1.00 | exact — an authorization flag |
-| `SCOPE_CREEP` | 1.00 | 0.80 | catches "spent when told not to", unrequested add-ons, violated "do not send" |
-| `CLAIM_MISMATCH` | — | 0.00 | **abstained by design** → routed to the LLM judge |
-
-Two things this table is *not* hiding:
-
-1. **`CLAIM_MISMATCH` recall is 0.** That's deliberate. Fuzzy claims ("cheapest", a wrong date) aren't
-   something a deterministic rule should pretend to judge, so the engine abstains and hands them to a gated
-   LLM judge that marks every finding `llm-assisted`. Run the 17 documented incidents through the engine and
-   it abstains on almost all of them — because real-world agent failures are overwhelmingly claim-mismatches.
-   That's the argument for deterministic-first: be exact where you can be, don't guess where you can't.
-2. **There is no "agents misbehave X%" headline yet.** That number can only come from real runs commissioned
-   against a live card (`self-run`/`gmail` provenance). A provenance *firewall* in the code forbids filling it
-   with synthetic or third-party data. It is pending, on purpose.
-
-Nothing above is a number in prose. Reproduce it:
-
-```bash
-npm test          # the full suite — unit + property-based & metamorphic fuzzing of the engine contract
-npm run eval      # the per-class table above, in the terminal
-npm run fuzz      # 50,000 mutated cases against the formal invariants in SPEC.md
-
-# the citable harness — Inspect AI (UK AISI). The TS engine is the classifier; this only scores it.
-npm run eval:build
-inspect eval eval/discrepancy_eval.py --model mockllm/model -T split=all -T seed=1234
-```
 
 ## How it works
 
@@ -72,47 +31,19 @@ inspect eval eval/discrepancy_eval.py --model mockllm/model -T split=all -T seed
   — never a raw email body. The gated judge sends only those, fenced as untrusted input, and is bounded
   (token cap, single retry, 15s timeout).
 
-## Verifiable by construction
-
-The engine is treated as safety-relevant code, not a demo script:
-
-- **A formal contract.** Behaviour is specified as 10 firing invariants **and 6 metamorphic relations** in
-  [`SPEC.md`](SPEC.md), written as executable predicates (`lib/engine/spec.ts`, `lib/engine/metamorphic.ts`) —
-  the numeric invariants re-derived independently of the engine, the scope sub-rules a single shared module
-  by design (so contract and engine cannot drift), with an independent rules-as-data mirror
-  (`lib/engine/rules-dsl.ts`) cross-checked against the engine over thousands of fuzzed inputs.
-- **Property-based + metamorphic fuzzing.** A seeded fuzzer mutates inputs against the rule boundaries —
-  **100,000 cases, zero violations** (`npm run fuzz -- 100000`; the default run and CI use 50,000) —
-  checking both the firing contract and relational truths (more money
-  charged can't fix an overspend; raising the budget can't create one; granting authorization can't add
-  findings). Runs in the test suite and on every build (`npm run fuzz`).
-- **Diagnosis, not just detection.** Each finding carries ranked, deterministic root-cause hypotheses
-  ("+$78 → likely an undisclosed seat fee + add-on") — closer to a black-box recorder than a tripwire.
-- **Tamper-evident, auditable receipts.** Each receipt is content-addressed (SHA-256 over its claim, evidence,
-  and verdict) and batched into a **Merkle audit trail**: one root commits to a session, and an inclusion proof
-  shows a receipt belongs to it *without revealing the others* — selective transparency, no SNARK
-  (`lib/engine/merkle.ts`). Signed, hash-chained agent receipts are themselves prior art
-  ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
-  in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the receipt
-  format. See [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).
-- **The judge is a measured instrument.** A calibration harness (`lib/engine/judge-eval.ts`) scores it against
-  human labels (TPR/FPR, precision/recall, Cohen's κ), reports rates as Wilson **confidence intervals** not
-  points, and runs a positional-bias probe — ready the moment a key and labels exist.
-- **Externally grounded.** Run against the 164 real airline + retail tasks of [τ²-bench](https://github.com/sierra-research/tau2-bench)
-  (Sierra, MIT), the engine produces **zero false positives** on the in-scope reference trajectories
-  (`npm run bench:tau2`). Honestly scoped — a specificity check, not a τ²-bench score; see [`bench/tau2/`](bench/tau2).
-- **CI re-proves it.** A GitHub Actions workflow runs typecheck + lint + tests + fuzz + eval + build (and the
-  Inspect harness) on every push — the eval is a regression gate, not a one-time claim.
-
 ## Use it from a live agent (MCP)
 
 Pacioli ships a [Model Context Protocol](https://modelcontextprotocol.io) server, so an agent (Claude Desktop,
 the Claude CLI) can call it **mid-task** to self-issue a receipt — double-entry bookkeeping in the loop, not just
-post-hoc. One read-only `reconcile_claim` tool over the same deterministic engine. See [`mcp/`](mcp).
+post-hoc. Three read-only tools over the same deterministic engine: `reconcile_claim` (one-shot), plus
+`reconcile_pr` and `reconcile_stream` for evidence that arrives **incrementally** (a PR's diff stats → CI, or a
+confirmation that lands field by field) — they report the earliest prefix at which a verdict is monotone-safe to
+commit (flag an oversized agent PR as `OVERSPEND` before CI even finishes). See [`mcp/`](mcp).
 
 ```bash
-npm run mcp                # stdio
-npx tsx mcp/smoke.ts       # end-to-end self-check
+npm run mcp                                # stdio (tools: reconcile_claim, reconcile_pr, reconcile_stream)
+npx tsx mcp/smoke.ts                       # end-to-end self-check
+npm run reconcile:pr -- --gate < pr.json   # the PR adapter as a CLI gate — exit 1 on a flagged agent PR
 ```
 
 ## Wire it into your pipeline
@@ -162,6 +93,16 @@ with a latency regression gate.
 | `PACIOLI_DB` | durable receipt store via Node's built-in sqlite |
 | `ALE_DATASET` | live dataset id for the external-benchmark adapter (`npm run bench:ale`) |
 
+## The Ledger Report
+
+A wall of real, source-cited agent failures rendered as receipts — Air Canada's chatbot, Replit wiping a
+production database, the $1 Tahoe, *Mata v. Avianca*. Every card links to a primary or reputable source.
+Cases still in active litigation are walled off and labeled **alleged**, and one defamation-adjacent
+consumer-complaint pattern is held back entirely. Every incident was adversarially fact-checked before
+inclusion.
+
+![The Ledger Report: documented agent failures as receipts](docs/ledger.png)
+
 ## Why this approach
 
 - **Rules before a model.** The classes that are actually deterministic (a number over budget, a recurring
@@ -176,6 +117,119 @@ with a latency regression gate.
   receipts through Node's **built-in** `node:sqlite` (set `PACIOLI_DB`) — durable storage with zero added
   dependencies, no ORM, no Redis. Gmail OAuth and a full stored ledger come only if the demo lands.
 
+## How it's verified
+
+Pacioli doesn't ask you to trust the engine — it measures it. Per-class scores, a formal contract, and
+property-based fuzzing, in three parts:
+
+### The one idea
+
+"What the agent claimed" versus "what actually happened" is **prediction versus ground truth**. So the
+reconciliation engine isn't something an eval is bolted onto — it *is* an eval, and it's measured like one:
+per-class precision/recall over a labeled set, deterministic rules first, every LLM judgment marked.
+
+### The measured result
+
+The deterministic engine, scored against the labeled fixtures. Precision is high where the engine commits,
+because the rules are exact. Recall is the honest story.
+
+| class | precision | recall | read |
+|---|---:|---:|---|
+| `OVERSPEND` | 1.00 | 0.92 | exact — a budget delta is a number |
+| `UNAUTH_RECURRENCE` | 1.00 | 1.00 | exact — an authorization flag |
+| `SCOPE_CREEP` | 1.00 | 0.80 | catches "spent when told not to", unrequested add-ons, violated "do not send" |
+| `CLAIM_MISMATCH` | — | 0.00 | **abstained by design** → routed to the LLM judge |
+
+Two things this table is *not* hiding:
+
+1. **`CLAIM_MISMATCH` recall is 0.** That's deliberate. Fuzzy claims ("cheapest", a wrong date) aren't
+   something a deterministic rule should pretend to judge, so the engine abstains and hands them to a gated
+   LLM judge that marks every finding `llm-assisted`. Run the 17 documented incidents through the engine and
+   it abstains on almost all of them — because real-world agent failures are overwhelmingly claim-mismatches.
+   That's the argument for deterministic-first: be exact where you can be, don't guess where you can't.
+2. **There is no "agents misbehave X%" headline yet.** That number can only come from real runs commissioned
+   against a live card (`self-run`/`gmail` provenance). A provenance *firewall* in the code forbids filling it
+   with synthetic or third-party data. It is pending, on purpose.
+
+Nothing above is a number in prose. Reproduce it:
+
+```bash
+npm test          # the full suite — unit + property-based & metamorphic fuzzing of the engine contract
+npm run eval      # the per-class table above, in the terminal
+npm run fuzz      # 50,000 mutated cases against the formal invariants in SPEC.md
+
+# the citable harness — Inspect AI (UK AISI). The TS engine is the classifier; this only scores it.
+npm run eval:build
+inspect eval eval/discrepancy_eval.py --model mockllm/model -T split=all -T seed=1234
+```
+
+### Verifiable by construction
+
+The engine is treated as safety-relevant code, not a demo script:
+
+- **A formal contract.** Behaviour is specified as 10 firing invariants **and 6 metamorphic relations** in
+  [`SPEC.md`](SPEC.md), written as executable predicates (`lib/engine/spec.ts`, `lib/engine/metamorphic.ts`) —
+  the numeric invariants re-derived independently of the engine, the scope sub-rules a single shared module
+  by design (so contract and engine cannot drift), with an independent rules-as-data mirror
+  (`lib/engine/rules-dsl.ts`) cross-checked against the engine over thousands of fuzzed inputs.
+- **Property-based + metamorphic fuzzing.** A seeded fuzzer mutates inputs against the rule boundaries —
+  **100,000 cases, zero violations** (`npm run fuzz -- 100000`; the default run and CI use 50,000) —
+  checking both the firing contract and relational truths (more money
+  charged can't fix an overspend; raising the budget can't create one; granting authorization can't add
+  findings). Runs in the test suite and on every build (`npm run fuzz`).
+- **Diagnosis, not just detection.** Each finding carries ranked, deterministic root-cause hypotheses
+  ("+$78 → likely an undisclosed seat fee + add-on") — closer to a black-box recorder than a tripwire.
+- **Tamper-evident, auditable receipts.** Each receipt is content-addressed (SHA-256 over its claim, evidence,
+  and verdict) and batched into a **Merkle audit trail**: one root commits to a session, and an inclusion proof
+  shows a receipt belongs to it *without revealing the others* — selective transparency, no SNARK
+  (`lib/engine/merkle.ts`). Signed, hash-chained agent receipts are themselves prior art
+  ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
+  in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the receipt
+  format. See [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).
+- **The deterministic fast path is falsifiable.** Trusting the cheap rules and escalating only the residual
+  to the LLM judge should give the *same verdict* as running the judge on everything — so Pacioli measures it,
+  it doesn't assume it. **Over 48 labeled fixtures the deterministic tier resolves ~40% of claims with zero
+  escalation and a verdict provably identical to judge-on-everything — 0 lossless violations, versus 25 for
+  the deliberately lossy never-escalate baseline — at zero model spend** (`npm run reconcile -- --equivalence`).
+  The equivalence relation (EQUIV-CASCADE; regime model-free → model-based, residual locus the claim) is
+  committed into the same Merkle audit trail as the receipts it summarizes, so the claim is itself
+  tamper-evident. The same CLI ships a keyless sample-k saturation curve (`--saturation`) and a
+  conformal-calibrated residual band (`--conformal`) — both deterministic, both zero model spend
+  (`lib/engine/cascade.ts`).
+- **The judge distills into the deterministic floor — holdout-gated.** Some of the residual is structurally
+  obvious (the merchant evidence literally says "booked a connecting flight *instead*"). Pacioli runs a judge
+  **jury** over the residual, and where the jury reaches a high-consensus agreement it *distills* that into a
+  candidate deterministic rule — but only PROMOTES the rule if it predicts the **ground-truth label out of
+  sample**: each candidate is **holdout-gated** on a slice it was not derived from and must hit the gold
+  precision floor, or it is rejected. The jury can be *fooled* (a clean claim that merely sounds suspicious);
+  the gold holdout gate is the stronger check that catches it and drops the rule. Over the 48 labeled
+  fixtures the keyless mock jury promotes one rule (`evidence-divergence-language`), **rejects a second**
+  that the jury agreed on but gold disproves out of sample, and never proposes a third — moving deterministic
+  coverage **39.6% → 54.2%** and the residual judge-call rate **60.4% → 45.8%** at a **24% replaceable
+  fraction** (20% out-of-sample). The jury reports **correlation-corrected effective votes** (2.58 of 4, not
+  the member count — a chorus of clones cannot manufacture consensus), and every promoted rule is
+  Merkle-receipted with its full jury-consensus provenance (`npm run distill`;
+  `lib/engine/{jury,distill,distill-receipt}.ts`). With a key, `--judge` seeds a real LLM jury; with none it
+  falls back to the keyless mock and says so.
+- **A selective-risk certificate on the residual judge.** A selective judge abstains on the claims it is
+  unsure of and commits a verdict only on a confident *accepted* region; its **selective risk** is its error
+  rate there. Pacioli prints a **distribution-free upper confidence bound** on that risk for unseen claims —
+  the exact-binomial (Clopper–Pearson) route, distribution-free conditional on exchangeability. This is the
+  selective-risk-certification framing of [Akter, Shihab & Sharma (arXiv:2509.12527)](https://arxiv.org/abs/2509.12527);
+  we deliberately take the distribution-free binomial route rather than print a PAC-Bayes constant, because
+  **at N in the tens an honest bound is WIDE, not a headline.** With one observed error in ten confident
+  flags the 95% bound is ~39% (vs a 10% point estimate) — so the deliverable is the **methodology and the
+  convergence**: the certificate WIDTH shrinks as O(1/√N), displayed as a width-vs-N curve, and we never
+  quote the small-N number as the judge's accuracy (`npm run certify`; `lib/engine/selective-risk.ts`).
+- **The judge is a measured instrument.** A calibration harness (`lib/engine/judge-eval.ts`) scores it against
+  human labels (TPR/FPR, precision/recall, Cohen's κ), reports rates as Wilson **confidence intervals** not
+  points, and runs a positional-bias probe — ready the moment a key and labels exist.
+- **Externally grounded.** Run against the 164 real airline + retail tasks of [τ²-bench](https://github.com/sierra-research/tau2-bench)
+  (Sierra, MIT), the engine produces **zero false positives** on the in-scope reference trajectories
+  (`npm run bench:tau2`). Honestly scoped — a specificity check, not a τ²-bench score; see [`bench/tau2/`](bench/tau2).
+- **CI re-proves it.** A GitHub Actions workflow runs typecheck + lint + tests + fuzz + eval + build (and the
+  Inspect harness) on every push — the eval is a regression gate, not a one-time claim.
+
 ## Limitations & known failure modes
 
 - `SCOPE_CREEP` recall is 0.80: the engine catches "purchased when no purchase was authorized", unrequested
@@ -188,16 +242,6 @@ with a latency regression gate.
   headline number.
 - The fixture set is small, so the per-class numbers carry real standard error (surfaced by Inspect's
   `stderr()`, not hidden).
-
-## The Ledger Report
-
-A wall of real, source-cited agent failures rendered as receipts — Air Canada's chatbot, Replit wiping a
-production database, the $1 Tahoe, *Mata v. Avianca*. Every card links to a primary or reputable source.
-Cases still in active litigation are walled off and labeled **alleged**, and one defamation-adjacent
-consumer-complaint pattern is held back entirely. Every incident was adversarially fact-checked before
-inclusion.
-
-![The Ledger Report: documented agent failures as receipts](docs/ledger.png)
 
 ## Run it locally
 

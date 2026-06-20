@@ -6,6 +6,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "mcp/**/*.test.ts", "app/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "mcp/**/*.test.ts", "app/**/*.test.ts", "agent/**/*.test.ts"],
   },
 });

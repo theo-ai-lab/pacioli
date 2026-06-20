@@ -7,6 +7,7 @@ import { topHypothesis } from "@/lib/engine/hypotheses";
 import { receiptHash, fingerprint } from "@/lib/engine/receipt-hash";
 import type { AgentClaim, Finding, MerchantEvidence, Verdict } from "@/lib/engine/types";
 import { Receipt } from "./Receipt";
+import { StreamingJudgePanel } from "./StreamingJudgePanel";
 import { runJudge } from "@/app/actions/judge";
 
 const clone = <T,>(x: T): T => structuredClone(x);
@@ -205,6 +206,9 @@ export function DemoConsole() {
           onReveal={() => setShowJudge(true)}
           onRunLive={runLiveJudge}
         />
+
+        {/* Additive: the streamed judge (token-by-token + explicit low-confidence/abstain state). */}
+        <StreamingJudgePanel claim={claim} evidence={evidence} />
       </div>
 
       {/* ── live receipt ── */}
