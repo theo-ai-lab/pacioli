@@ -66,6 +66,13 @@ transport (413 past 64KB, even chunked). Errors: `400` bad JSON · `401` bad key
 `pacioli_receipts_flagged`, `pacioli_findings_by_type{type=…}`, and `pacioli_store_info{backend=…}` so you
 can see whether you're on durable `sqlite` (set `PACIOLI_DB=/path/receipts.db`) or the in-memory fallback.
 
+**Deploy parity.** `GET /api/version` reports the exact commit a deployment serves (`{ sha, builtAt, version }`
+— deliberately unauthenticated, so anyone can check it). The sha is captured by `npm run deploy` **before** the
+source leaves the machine (`scripts/predeploy.mjs`, which refuses a dirty tree — a remote build has no `.git`
+to ask). A separate [deploy-parity workflow](.github/workflows/deploy-parity.yml) curls the live demo on every
+push to `main` and weekly: a deployed sha that isn't `main`, or any route this README names going missing, is
+a red X — a stale deploy can't silently falsify the demo links above.
+
 **CI gate (SARIF / JUnit).** `npm run audit -- --gate corpus.jsonl` reconciles a JSONL corpus of
 claim/evidence pairs and exits non-zero if any claim is flagged — drop it into CI to fail a build on agent
 misbehavior. `--format sarif` (default) uploads as a GitHub code-scanning report; `--format junit` feeds any
