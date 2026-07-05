@@ -1,0 +1,86 @@
+# Deploy parity — does the live demo serve the code this repo claims it does?
+#
+# Deliberately a SEPARATE workflow from ci.yml: the CI badge answers "does the code work?";
+# this one answers "is the deploy the code?". Mixing them would let a stale deploy redden the
+# code's badge — or worse, let a green code badge imply a fresh deploy.
+#
+# EXPECTED TO BE RED whenever the live deploy trails main — that is the point. The moment main
+# moves without a redeploy, this goes red and stays red until `npm run deploy` runs; a stale
+# demo is now a visible X instead of a silently wrong link in the README.
+#
+# Two checks against https://pacioliapp.vercel.app:
+#   1. GET /api/version — the deployed sha must equal the commit this run is for.
+#   2. Every route the README names must answer with its expected status. POST-only routes are
+#      probed with GET so the probe has no side effects: an existing route answers 405 (method
+#      not allowed), a missing one 404s. 401 is accepted where a deploy-side PACIOLI_API_KEY
+#      would gate the route — present-but-keyed is parity, missing is not.
+name: deploy-parity
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1" # weekly — catches drift (or an expired deploy) even when main is quiet
+  workflow_dispatch: {} # for re-running by hand right after a redeploy
+
+permissions:
+  contents: none # pure HTTP probes; this workflow needs no checkout and no token
+
+env:
+  BASE: https://pacioliapp.vercel.app
+
+jobs:
+  parity:
+    name: deployed sha == main · README routes answer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployed sha matches this commit
+        run: |
+          # On push, GITHUB_SHA is the pushed head of main; on schedule/dispatch it is the tip
+          # of the default branch — in both cases exactly "what this repo claims is live".
+          status=$(curl -sS -o version.json -w '%{http_code}' --max-time 30 --retry 2 \
+            -H 'cache-control: no-cache' "$BASE/api/version?parity=$GITHUB_RUN_ID")
+          if [ "$status" != "200" ]; then
+            echo "::error::GET /api/version answered $status — the live deploy predates the version endpoint (or is down). Redeploy with: npm run deploy"
+            exit 1
+          fi
+          cat version.json
+          deployed=$(jq -r '.sha' version.json)
+          if [ "$deployed" != "$GITHUB_SHA" ]; then
+            echo "::error::Deploy drift: live deploy serves $deployed, main is $GITHUB_SHA. Redeploy with: npm run deploy"
+            exit 1
+          fi
+          if [ "$(jq -r '.dirty' version.json)" = "true" ]; then
+            echo "::error::The live deploy was built from a DIRTY tree — the sha does not describe the deployed code. Redeploy from a clean tree."
+            exit 1
+          fi
+          echo "parity: live deploy serves $deployed"
+
+      - name: Every README-named route answers
+        run: |
+          fail=0
+          probe() { # probe <path> <expected-status...>
+            path=$1; shift
+            got=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 --retry 2 \
+              -H 'cache-control: no-cache' "$BASE$path")
+            for want in "$@"; do
+              if [ "$got" = "$want" ]; then echo "ok   GET $path → $got"; return; fi
+            done
+            echo "::error::GET $path answered $got (expected $*) — route missing from the live deploy?"
+            fail=1
+          }
+          # Pages the README links.
+          probe / 200
+          probe /methods 200
+          probe /ledger 200
+          # GET-shaped API routes: 200 open, 401 if the deploy sets PACIOLI_API_KEY. 404 fails.
+          probe /api/version 200
+          probe /api/ledger 200 401
+          probe /api/metrics 200 401
+          # POST-only routes, probed with GET (no side effects): present == 405, missing == 404.
+          # /api/reconcile and /api/ingest are body-validated writes; /api/judge/stream backs the
+          # demo's live judge. All three must exist for the README's claims to hold.
+          probe /api/reconcile 405
+          probe /api/ingest 405
+          probe /api/judge/stream 405
+          exit $fail
