@@ -37,6 +37,8 @@ generation, it just surfaces the engine's precomputed predictions for scoring. S
 - `eval/discrepancy_eval.py` — the Inspect task: a pass-through solver + a set-match scorer with custom
   per-class precision/recall metrics (a custom `@metric`, since `grouped()` can't see cross-class
   false positives).
+- `eval/RESULTS.md` — the frozen snapshot. The content between its `repro` markers is machine-written
+  by `npm run eval:snapshot`; CI regenerates it and fails on drift, so the snapshot tracks the engine.
 
 > Note on N: the synthetic fixture set is intentionally small, so the per-class numbers carry real
 > standard error — surfaced by `stderr()`, not hidden. The honest headline rate is the *separate*,

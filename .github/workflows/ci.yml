@@ -19,6 +19,7 @@ jobs:
       - run: npm test
       - run: npm run fuzz # 50k mutated cases against the formal invariants
       - run: npm run eval # per-class precision/recall
+      - run: npm run eval:snapshot && git diff --exit-code eval/RESULTS.md # frozen eval/RESULTS.md must reproduce byte-for-byte
       - run: npm run build
 
   inspect-eval:
