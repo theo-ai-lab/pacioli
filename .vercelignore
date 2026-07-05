@@ -1,0 +1,20 @@
+# Controls what a `vercel` CLI deploy uploads. Two jobs:
+#
+#   1. lib/generated/build-info.json (gitignored, written by scripts/predeploy.mjs) MUST upload —
+#      it is how /api/version knows which commit the deployment serves. Do not exclude lib/generated.
+#   2. The CLI's default exclusion list is fixed (node_modules, .next, .env.local, ...) and does NOT
+#      apply .gitignore patterns, so private/dev files this repo gitignores are excluded here
+#      explicitly or they would ship with the source upload.
+.env*
+!.env.example
+*.pem
+logs
+coverage
+screenshots
+*.log
+*.tsbuildinfo
+dataset/captured.jsonl
+bench/tau2/.cache
+.venv
+__pycache__
+.DS_Store

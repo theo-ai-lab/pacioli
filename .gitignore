@@ -27,6 +27,10 @@ __pycache__/
 # ── vercel ──
 .vercel
 
+# ── deploy-time build provenance (scripts/predeploy.mjs) — committing it would let the recorded
+#    sha drift from the commit it names; /api/version falls back honestly when it is absent ──
+/lib/generated/
+
 # ── os / editor / debug ──
 .DS_Store
 npm-debug.log*
