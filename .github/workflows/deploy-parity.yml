@@ -10,10 +10,11 @@
 #
 # Two checks against https://pacioliapp.vercel.app:
 #   1. GET /api/version — the deployed sha must equal the commit this run is for.
-#   2. Every route the README names must answer with its expected status. POST-only routes are
-#      probed with GET so the probe has no side effects: an existing route answers 405 (method
-#      not allowed), a missing one 404s. 401 is accepted where a deploy-side PACIOLI_API_KEY
-#      would gate the route — present-but-keyed is parity, missing is not.
+#   2. Every route the README names — plus the API routes the demo pages call — must answer
+#      with its expected status. POST-only routes are probed with GET so the probe has no side
+#      effects: an existing route answers 405 (method not allowed), a missing one 404s. 401 is
+#      accepted where a deploy-side PACIOLI_API_KEY would gate the route — present-but-keyed is
+#      parity, missing is not.
 name: deploy-parity
 
 on:
@@ -31,7 +32,7 @@ env:
 
 jobs:
   parity:
-    name: deployed sha == main · README routes answer
+    name: deployed sha == main · demo routes answer
     runs-on: ubuntu-latest
     steps:
       - name: Deployed sha matches this commit
@@ -56,7 +57,7 @@ jobs:
           fi
           echo "parity: live deploy serves $deployed"
 
-      - name: Every README-named route answers
+      - name: Every demo-facing route answers
         run: |
           fail=0
           probe() { # probe <path> <expected-status...>
@@ -73,13 +74,14 @@ jobs:
           probe / 200
           probe /methods 200
           probe /ledger 200
-          # GET-shaped API routes: 200 open, 401 if the deploy sets PACIOLI_API_KEY. 404 fails.
+          # GET-shaped API routes: /api/version and /api/metrics are README-named; /api/ledger is
+          # what the ledger page reads. 200 open, 401 if the deploy sets PACIOLI_API_KEY. 404 fails.
           probe /api/version 200
           probe /api/ledger 200 401
           probe /api/metrics 200 401
           # POST-only routes, probed with GET (no side effects): present == 405, missing == 404.
-          # /api/reconcile and /api/ingest are body-validated writes; /api/judge/stream backs the
-          # demo's live judge. All three must exist for the README's claims to hold.
+          # The README documents POST /api/reconcile; the demo UI posts to /api/ingest and
+          # /api/judge/stream. All three must exist on the live deploy for the demo to work.
           probe /api/reconcile 405
           probe /api/ingest 405
           probe /api/judge/stream 405
