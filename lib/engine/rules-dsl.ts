@@ -13,7 +13,7 @@
  * (add-on/prohibition keyword matching) and CLAIM_MISMATCH abstention stay in the engine on purpose —
  * a keyword list is not a numeric predicate, and abstention is the point of deterministic-first.
  */
-import { TOLERANCE, type DiffInput, type FindingType } from "./types";
+import { TOLERANCE, type DiffInput, type FindingType } from "@pacioli-app/engine";
 
 type Field = "amount" | "budget";
 type Expr = number | { ref: Field } | { mul: [Expr, Expr] } | { sub: [Expr, Expr] };

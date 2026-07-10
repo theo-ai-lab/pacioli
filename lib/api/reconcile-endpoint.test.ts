@@ -6,7 +6,7 @@ import {
   type ReconcileBatchSuccess,
   type ReconcileSuccess,
 } from "./reconcile-endpoint";
-import type { Finding, FindingType } from "../engine/types";
+import type { Finding, FindingType } from "@pacioli-app/engine";
 
 /** Narrow the typed response union to the success arm (fails the test loudly otherwise). */
 function ok(r: Awaited<ReturnType<typeof reconcileEndpoint>>): ReconcileSuccess {

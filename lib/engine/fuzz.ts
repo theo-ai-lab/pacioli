@@ -2,13 +2,13 @@
  * Pacioli — property-based invariant fuzzer.
  *
  * Generates seeded, mutated (claim, evidence) pairs — biased toward the rule boundaries —
- * runs the engine, and asserts every contract in SPEC.md / lib/engine/spec.ts holds, plus
+ * runs the engine, and asserts every contract in SPEC.md / packages/engine/src/spec.ts holds, plus
  * determinism. Reproducible: same (cases, seed) ⇒ same run. Run: `npm run fuzz`.
  */
 
-import { diff } from "./diff";
-import { checkInvariants, type Violation } from "./spec";
-import type { DiffInput, EvidenceSource } from "./types";
+import { diff } from "@pacioli-app/engine";
+import { checkInvariants, type Violation } from "@pacioli-app/engine";
+import type { DiffInput, EvidenceSource } from "@pacioli-app/engine";
 
 // deterministic PRNG (mulberry32) — reproducible fuzzing, no Math.random
 export function mulberry32(seed: number): () => number {

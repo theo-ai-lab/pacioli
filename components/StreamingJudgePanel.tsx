@@ -15,7 +15,7 @@
  */
 
 import { useRef, useState } from "react";
-import type { AgentClaim, Finding, MerchantEvidence } from "@/lib/engine/types";
+import type { AgentClaim, Finding, MerchantEvidence } from "@pacioli-app/engine";
 
 type Phase = "idle" | "streaming" | "match" | "clean" | "low-confidence" | "error" | "gated" | "limited";
 

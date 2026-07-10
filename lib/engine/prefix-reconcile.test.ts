@@ -10,8 +10,8 @@ import {
   streamFromDiffInput,
   type ReconcileIncrement,
 } from "./prefix-reconcile";
-import { diff } from "./diff";
-import type { DiffInput } from "./types";
+import { diff } from "@pacioli-app/engine";
+import type { DiffInput } from "@pacioli-app/engine";
 
 describe("prefix-reconcile — verdict class helpers", () => {
   it("classifies balanced vs flagged and flips opposite", () => {

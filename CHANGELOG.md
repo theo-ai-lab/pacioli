@@ -13,6 +13,14 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-07-10) `@pacioli-app/engine` npm workspace (`packages/engine`): the
+  zero-dependency deterministic core — `diff`, the typed contract, receipts,
+  content addressing, the Merkle audit trail, and the executable invariant
+  contract — extracted from `lib/engine/` into an installable package (CJS +
+  types, Web Crypto only, Node 20+ and browsers). The app, CLIs, MCP server,
+  and adapters now import it as `@pacioli-app/engine`. Not yet published to the
+  registry (first publish pending; the bare name `pacioli` on npm belongs to an
+  unrelated project, hence the scope).
 - (2026-06-12) Pacioli v1 — claim-vs-evidence reconciliation for AI agents: the
   zero-dependency deterministic diff engine with the citation invariant enforced
   at the type level, SHA-256 content-addressed receipts, a Merkle audit trail,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runAdapter, type Mapper, type MappedTask } from "./external";
-import type { DiffInput } from "../engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 const input = (amountUsd: number, budgetUsd: number): DiffInput => ({
   claim: { agent: "a", task: "book", text: "booked", authorized: { budgetUsd, mayPurchase: true } },

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { GroundTruthSample } from "@/lib/engine/types";
+import type { GroundTruthSample } from "@pacioli-app/engine";
 import styles from "./IncidentCard.module.css";
 
 const compactUsd = (n: number): string => {

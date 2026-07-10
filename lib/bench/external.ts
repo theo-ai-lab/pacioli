@@ -8,8 +8,8 @@
  * precision/recall over any gold-labeled tasks. Coverage being a thin slice for a task-completion
  * benchmark is reported plainly, not hidden.
  */
-import { diff } from "../engine/diff";
-import { FINDING_TYPES, type DiffInput, type FindingType } from "../engine/types";
+import { diff } from "@pacioli-app/engine";
+import { FINDING_TYPES, type DiffInput, type FindingType } from "@pacioli-app/engine";
 
 export interface MappedTask {
   id: string;

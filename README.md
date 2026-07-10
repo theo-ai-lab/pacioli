@@ -18,7 +18,7 @@ subscribed — against what the **evidence** shows, and prints a receipt when th
 
 ## How it works
 
-- **Deterministic-first, LLM-marked.** Plain typed TypeScript rules (`lib/engine/diff.ts`) run in the browser:
+- **Deterministic-first, LLM-marked.** Plain typed TypeScript rules (`packages/engine/src/diff.ts`) run in the browser:
   overspend, unauthorized recurrence, and scope creep are exact and instant, no account or key. Only the fuzzy
   residual falls through to the judge, and every judge finding is badged so an LLM verdict never silently
   drives a decision.
@@ -175,7 +175,7 @@ inspect eval eval/discrepancy_eval.py --model mockllm/model -T split=all -T seed
 The engine is treated as safety-relevant code, not a demo script:
 
 - **A formal contract.** Behaviour is specified as 10 firing invariants **and 6 metamorphic relations** in
-  [`SPEC.md`](SPEC.md), written as executable predicates (`lib/engine/spec.ts`, `lib/engine/metamorphic.ts`) —
+  [`SPEC.md`](SPEC.md), written as executable predicates (`packages/engine/src/spec.ts`, `lib/engine/metamorphic.ts`) —
   the numeric invariants re-derived independently of the engine, the scope sub-rules a single shared module
   by design (so contract and engine cannot drift), with an independent rules-as-data mirror
   (`lib/engine/rules-dsl.ts`) cross-checked against the engine over thousands of fuzzed inputs.
@@ -189,7 +189,7 @@ The engine is treated as safety-relevant code, not a demo script:
 - **Tamper-evident, auditable receipts.** Each receipt is content-addressed (SHA-256 over its claim, evidence,
   and verdict) and batched into a **Merkle audit trail**: one root commits to a session, and an inclusion proof
   shows a receipt belongs to it *without revealing the others* — selective transparency, no SNARK
-  (`lib/engine/merkle.ts`). Signed, hash-chained agent receipts are themselves prior art
+  (`packages/engine/src/merkle.ts`). Signed, hash-chained agent receipts are themselves prior art
   ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
   in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the receipt
   format. See [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).

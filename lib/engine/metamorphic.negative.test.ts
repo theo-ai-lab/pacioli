@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import type { DiffInput, Finding, Verdict } from "./types";
+import type { DiffInput, Finding, Verdict } from "@pacioli-app/engine";
 
 // NEGATIVE PATH: prove the metamorphic harness can actually DETECT a broken engine — a checker that
-// always returned [] would pass every positive test. We mock diff() with a deliberately broken
-// engine and assert the corresponding property names show up as violations.
-vi.mock("./diff", () => ({
+// always returned [] would pass every positive test. We mock diff() (now imported from the
+// @pacioli-app/engine workspace) with a deliberately broken engine, keeping every other export
+// intact, and assert the corresponding property names show up as violations.
+vi.mock("@pacioli-app/engine", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@pacioli-app/engine")>()),
   diff: (i: DiffInput): Verdict => {
     const findings: Finding[] = [];
     // BROKEN: fires OVERSPEND only at EXACTLY $400 — charging more "fixes" it (violates MP-CHARGE-MONOTONE).

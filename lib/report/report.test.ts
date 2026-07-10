@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { audit, toCase, summarize } from "./audit";
 import { toSarif } from "./sarif";
 import { toJUnit } from "./junit";
-import type { DiffInput } from "../engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 const overspend: DiffInput = {
   claim: { agent: "t", task: "book flight under $300", text: "booked", authorized: { budgetUsd: 300, mayPurchase: true } },

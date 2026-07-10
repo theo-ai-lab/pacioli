@@ -12,7 +12,7 @@
  * runs under tsx, which does not resolve the app's `@/` tsconfig alias.)
  */
 
-import { buildReceipt } from "../lib/engine/receipt";
+import { buildReceipt } from "@pacioli-app/engine";
 import {
   reconcileStream,
   streamFromDiffInput,
@@ -26,7 +26,7 @@ import {
   type PullRequestEvidence,
 } from "../lib/adapters/pr-reconcile";
 import { toDiffInput, type ReconcileArgs } from "./reconcile";
-import type { DiffInput } from "../lib/engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 /** A policy choice shared by both tools: monotone-safe by default, k-stable opt-in. */
 export type StreamPolicy = "safe" | "stable-k";

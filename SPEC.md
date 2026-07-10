@@ -1,9 +1,9 @@
 # Pacioli — Engine Specification (design by contract)
 
-This is the **formal contract** for the deterministic diff engine (`lib/engine/diff.ts`). Each invariant is
-stated here in plain language *and* encoded as an executable predicate in `lib/engine/spec.ts`. The numeric
+This is the **formal contract** for the deterministic diff engine (`packages/engine/src/diff.ts`). Each invariant is
+stated here in plain language *and* encoded as an executable predicate in `packages/engine/src/spec.ts`. The numeric
 invariants re-derive their conditions independently of the engine; the `SCOPE_CREEP` sub-rule predicates
-(add-on / send-prohibition) are deliberately a SINGLE shared module (`lib/engine/scope-rules.ts`) imported by
+(add-on / send-prohibition) are deliberately a SINGLE shared module (`packages/engine/src/scope-rules.ts`) imported by
 both engine and contract so the two cannot drift — independence for that slice comes from the rule-DSL mirror
 (`lib/engine/rules-dsl.ts`), which re-implements the numeric rules as data and is cross-checked against the
 engine over thousands of fuzzed inputs. A property-based fuzzer (`lib/engine/fuzz.ts`) generates tens of
@@ -29,7 +29,7 @@ Notation: `b = authorized.budgetUsd`, `a = evidence.amountUsd`, `tol = 0.02` (`T
   without an **un-negated** mention in the authorized text ("no trip insurance" is a prohibition, not a
   request); or (c) *violated send-prohibition* — the authorized text contains a "do not send"/"draft only"
   instruction and the evidence shows the send happened (word-bounded `sent|delivered`). Sub-rules (b)/(c) live
-  in `lib/engine/scope-rules.ts`, imported by BOTH the engine and this contract so they cannot drift.
+  in `packages/engine/src/scope-rules.ts`, imported by BOTH the engine and this contract so they cannot drift.
 - **INV-ABSTAIN** — the engine **never** emits `CLAIM_MISMATCH`. That class is the LLM judge's residual; a
   deterministic rule must not guess at it.
 - **INV-BALANCED** — `verdict.balanced = true` **iff** `verdict.findings` is empty.
@@ -58,9 +58,9 @@ respect, fuzzed over the same generator:
   `UNAUTH_RECURRENCE` — the no-double-count rule, relationally stated).
 
 ## Integrity & evaluation (supporting contracts)
-- **Content addressing** (`lib/engine/receipt-hash.ts`): a receipt's hash is SHA-256 over the canonical
+- **Content addressing** (`packages/engine/src/receipt-hash.ts`): a receipt's hash is SHA-256 over the canonical
   `{claim, evidence, verdict}`; any edit changes it.
-- **Merkle audit trail** (`lib/engine/merkle.ts`): for receipt hashes `L`, `verifyProof(L[i], proof(L, i),
+- **Merkle audit trail** (`packages/engine/src/merkle.ts`): for receipt hashes `L`, `verifyProof(L[i], proof(L, i),
   root(L))` holds for all `i`; any change to a leaf changes `root(L)`.
 - **Judge calibration** (`lib/engine/judge-eval.ts`): the judge is scored against human labels (TPR/FPR,
   precision/recall, Cohen's κ); rates are reported as Wilson confidence intervals, not points; a positional-
@@ -83,6 +83,6 @@ respect, fuzzed over the same generator:
   `balanced=true` deterministically (the constraint mismatch is the judge's residual, not the engine's).
 
 ## Traceability
-Spec clause → check: each `INV-*` above maps 1:1 to a predicate in `lib/engine/spec.ts::checkInvariants`, exercised
+Spec clause → check: each `INV-*` above maps 1:1 to a predicate in `packages/engine/src/spec.ts::checkInvariants`, exercised
 by `lib/engine/fuzz.ts` and asserted in `lib/engine/fuzz.test.ts`. The Given/When/Then examples map to cases in
-`lib/engine/diff.test.ts`.
+`packages/engine/src/diff.test.ts`.

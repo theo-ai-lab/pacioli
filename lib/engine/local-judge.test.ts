@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { localJudge, localJudgeAvailable } from "./local-judge";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 const input: DiffInput = {
   claim: { agent: "a", task: "book the cheapest", text: "booked the cheapest option", authorized: { constraints: ["cheapest"] } },

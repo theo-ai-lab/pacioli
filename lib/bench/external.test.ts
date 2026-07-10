@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runAdapter, type Mapper } from "./external";
-import type { DiffInput } from "../engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 interface Raw {
   kind: "overspend" | "clean" | "nonfinancial";

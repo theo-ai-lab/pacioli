@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { AgentClaim, Dimension, MerchantEvidence, Verdict } from "@/lib/engine/types";
+import type { AgentClaim, Dimension, MerchantEvidence, Verdict } from "@pacioli-app/engine";
 import styles from "./Receipt.module.css";
 
 export interface ReceiptProps {

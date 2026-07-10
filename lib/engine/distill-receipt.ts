@@ -13,9 +13,9 @@
  * Zero dependencies (Web Crypto via crypto.ts); pure.
  */
 
-import { canonicalJSON, sha256Hex } from "./crypto";
-import { merkleRoot, merkleProof, verifyProof, type ProofStep } from "./merkle";
-import { fingerprint } from "./receipt-hash";
+import { canonicalJSON, sha256Hex } from "@pacioli-app/engine";
+import { merkleRoot, merkleProof, verifyProof, type ProofStep } from "@pacioli-app/engine";
+import { fingerprint } from "@pacioli-app/engine";
 import type { PromotedRule } from "./distill";
 
 export interface PromotionReceipt {

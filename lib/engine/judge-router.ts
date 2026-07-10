@@ -6,7 +6,7 @@
  * one. `auto` prefers ON-DEVICE (free, private, no key) → hosted (if a key) → off (deterministic-only).
  * Every judge finding stays badged `llmAssisted`, so an LLM verdict never silently drives a decision.
  */
-import type { DiffInput, Finding } from "./types";
+import type { DiffInput, Finding } from "@pacioli-app/engine";
 import { judge, judgeEnabled } from "./judge";
 import { localJudge, localJudgeAvailable } from "./local-judge";
 

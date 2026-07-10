@@ -30,7 +30,7 @@
 
 import { mulberry32 } from "./fuzz";
 import { wilsonInterval } from "./judge-eval";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 // ── the keyless mismatch-score proxy (locus = the claim) ────────────────────────────────────────────
 

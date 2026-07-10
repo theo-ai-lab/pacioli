@@ -1,4 +1,4 @@
-import { diff } from "@/lib/engine/diff";
+import { diff } from "@pacioli-app/engine";
 import { EXAMPLES } from "@/lib/examples";
 import styles from "./WeeklyClose.module.css";
 

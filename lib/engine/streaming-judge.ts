@@ -31,7 +31,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { fence } from "./local-judge";
 import { JUDGE_MODEL } from "./judge";
-import type { DiffInput, Dimension, Finding, Severity } from "./types";
+import type { DiffInput, Dimension, Finding, Severity } from "@pacioli-app/engine";
 
 /** Same deliberate judge tier as the non-streamed judge — one source of truth for the model. */
 export const STREAM_JUDGE_MODEL = JUDGE_MODEL;

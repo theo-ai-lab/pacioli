@@ -16,7 +16,7 @@
  * Fuzzed over the same generator as lib/engine/fuzz.ts (`npm run fuzz` covers the firing contract).
  */
 
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { genInput, mulberry32 } from "./fuzz";
 import {
   reconcileStream,
@@ -25,7 +25,7 @@ import {
   type ReconcileOptions,
   type VerdictClass,
 } from "./prefix-reconcile";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 const fires = (i: DiffInput, t: string): boolean => diff(i).findings.some((f) => f.type === t);
 const types = (i: DiffInput): Set<string> => new Set(diff(i).findings.map((f) => f.type));

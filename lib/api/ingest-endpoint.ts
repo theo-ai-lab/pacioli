@@ -17,13 +17,13 @@
  * webhook — see app/api/ingest/route.ts) lives in the CALLER, so this module and its tests never
  * touch the network. Tests drive it with fixture confirmation payloads.
  *
- * PRIVACY INVARIANT (lib/engine/types.ts): the raw confirmation body is parsed in-memory and DROPPED.
+ * PRIVACY INVARIANT (packages/engine/src/types.ts): the raw confirmation body is parsed in-memory and DROPPED.
  * Only extracted fields + a short, redacted `excerpt` leave this function; the store persists less still.
  */
 import { z } from "zod";
-import { buildReceipt } from "../engine/receipt";
-import { UNREQUESTED_ADDON_KEYWORDS } from "../engine/scope-rules";
-import type { DiffInput, Finding, MerchantEvidence } from "../engine/types";
+import { buildReceipt } from "@pacioli-app/engine";
+import { UNREQUESTED_ADDON_KEYWORDS } from "@pacioli-app/engine";
+import type { DiffInput, Finding, MerchantEvidence } from "@pacioli-app/engine";
 
 export const IngestBody = z.object({
   agent: z.string().max(120).default("api"),

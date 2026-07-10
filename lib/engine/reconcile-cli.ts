@@ -18,7 +18,7 @@
  * from the distinct available backends and falls back honestly to the mock when fewer than two exist.
  */
 
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { loadSeed, loadIncidents } from "./dataset";
 import {
   cascadeMetrics,
@@ -30,8 +30,8 @@ import {
   type JudgeFn,
 } from "./cascade";
 import { buildCascadeReceipt } from "./cascade-receipt";
-import { merkleRoot, merkleProof, verifyProof } from "./merkle";
-import { receiptHash } from "./receipt-hash";
+import { merkleRoot, merkleProof, verifyProof } from "@pacioli-app/engine";
+import { receiptHash } from "@pacioli-app/engine";
 import { resolveJudge, type JudgeMode } from "./judge-router";
 import { saturationCurve, syntheticJudgeInstrument } from "./saturation";
 import {
@@ -52,7 +52,7 @@ import {
 import { applyPromotedRules, distillRules } from "./distill";
 import { buildPromotionLedger, provePromotion, verifyPromotionInclusion } from "./distill-receipt";
 import { certifySelectiveRisk, widthVsN, type SelectiveItem } from "./selective-risk";
-import type { DiffInput, GroundTruthSample } from "./types";
+import type { DiffInput, GroundTruthSample } from "@pacioli-app/engine";
 
 const args = process.argv.slice(2);
 const flag = (name: string): boolean => args.includes(name);

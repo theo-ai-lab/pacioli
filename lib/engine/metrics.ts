@@ -7,11 +7,11 @@
  * so every reported number traces to the same code path.
  *
  * The provenance firewall is enforced by the CALLER (it chooses which rows to
- * pass in); see lib/engine/types.ts `isHeadlineEligible` / `isReal`.
+ * pass in); see packages/engine/src/types.ts `isHeadlineEligible` / `isReal`.
  */
 
-import { diff } from "./diff";
-import type { FindingType, GroundTruthSample } from "./types";
+import { diff } from "@pacioli-app/engine";
+import type { FindingType, GroundTruthSample } from "@pacioli-app/engine";
 
 export const FINDING_TYPES: FindingType[] = [
   "OVERSPEND",

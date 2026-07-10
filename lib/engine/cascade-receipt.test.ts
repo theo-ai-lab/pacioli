@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { cascadeMetrics, goldOracleJudge, EQUIV_CASCADE } from "./cascade";
 import { buildCascadeReceipt, verifyCascadeReceipt } from "./cascade-receipt";
-import { merkleRoot, merkleProof, verifyProof } from "./merkle";
+import { merkleRoot, merkleProof, verifyProof } from "@pacioli-app/engine";
 import { loadSeed, loadIncidents } from "./dataset";
-import type { GroundTruthSample } from "./types";
+import type { GroundTruthSample } from "@pacioli-app/engine";
 
 const corpus = (): GroundTruthSample[] => [...loadSeed(), ...loadIncidents()];
 

@@ -22,8 +22,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { diff } from "../../lib/engine/diff";
-import type { DiffInput, GroundTruthSample } from "../../lib/engine/types";
+import { diff } from "@pacioli-app/engine";
+import type { DiffInput, GroundTruthSample } from "@pacioli-app/engine";
 import { evaluate } from "../../lib/engine/metrics";
 
 const DIR = join(process.cwd(), "bench", "tau2");

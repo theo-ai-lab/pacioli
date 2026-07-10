@@ -10,6 +10,10 @@
 *.tsbuildinfo
 next-env.d.ts
 
+# ── workspace package build output (`npm run build -w packages/engine`) ──
+packages/*/dist/
+*.tgz
+
 # ── testing / coverage ──
 /coverage
 

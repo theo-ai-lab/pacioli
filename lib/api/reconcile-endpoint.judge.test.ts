@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { reconcileEndpoint, type ReconcileSuccess } from "./reconcile-endpoint";
 import { resolveJudge } from "../engine/judge-router";
-import type { Finding } from "../engine/types";
+import type { Finding } from "@pacioli-app/engine";
 
 vi.mock("../engine/judge-router", () => ({ resolveJudge: vi.fn() }));
 const mockResolve = vi.mocked(resolveJudge);

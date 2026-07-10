@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fuzzReconMr, reconMrViolations, RECON_MR, ALL_METAMORPHIC_PROPERTIES } from "./metamorphic";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 describe("RECON-MR — monotone-safety of early commit (safe policy)", () => {
   it("never flips a committed verdict across 20k fuzzed arrival streams", () => {

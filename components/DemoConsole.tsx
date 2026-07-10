@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { diff } from "@/lib/engine/diff";
+import { diff } from "@pacioli-app/engine";
 import { EXAMPLES, EXAMPLE_BY_ID } from "@/lib/examples";
-import { topHypothesis } from "@/lib/engine/hypotheses";
-import { receiptHash, fingerprint } from "@/lib/engine/receipt-hash";
-import type { AgentClaim, Finding, MerchantEvidence, Verdict } from "@/lib/engine/types";
+import { topHypothesis } from "@pacioli-app/engine";
+import { receiptHash, fingerprint } from "@pacioli-app/engine";
+import type { AgentClaim, Finding, MerchantEvidence, Verdict } from "@pacioli-app/engine";
 import { Receipt } from "./Receipt";
 import { StreamingJudgePanel } from "./StreamingJudgePanel";
 import { runJudge } from "@/app/actions/judge";

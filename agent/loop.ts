@@ -4,7 +4,7 @@
  * This is a hand-rolled tool-use loop (we own the loop; the model is injected). The model proposes an
  * action; we EXECUTE it against the sandboxed commerce surface; then — the whole point — we reconcile
  * what we CLAIM we did against what the merchant ACTUALLY did using Pacioli's own `diff()` engine
- * (lib/engine/diff.ts), the same deterministic oracle the auditor uses.
+ * (packages/engine/src/diff.ts), the same deterministic oracle the auditor uses.
  *
  *   • BALANCED      → the action reconciles under the authorization. We finish, with a tamper-evident
  *                     receipt for the action that balanced. This is the ONLY way the loop succeeds.
@@ -18,9 +18,9 @@
  * needs ANTHROPIC_API_KEY; the live commerce client needs a Stripe TEST key (see agent/tools.ts).
  */
 
-import { diff } from "../lib/engine/diff";
-import { buildReceipt } from "../lib/engine/receipt";
-import type { Authorization, DiffInput, FindingType, MerchantEvidence, Verdict } from "../lib/engine/types";
+import { diff } from "@pacioli-app/engine";
+import { buildReceipt } from "@pacioli-app/engine";
+import type { Authorization, DiffInput, FindingType, MerchantEvidence, Verdict } from "@pacioli-app/engine";
 import { cancelSubscription, listPlans, subscribe, type CommerceClient, type Plan } from "./tools";
 import type { GovernorGate, ProposedToolCall } from "./governor";
 

@@ -4,7 +4,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { IncidentCard } from "@/components/IncidentCard";
 import { SessionLedger } from "@/components/SessionLedger";
 import { loadIncidents } from "@/lib/engine/dataset";
-import type { GroundTruthSample } from "@/lib/engine/types";
+import type { GroundTruthSample } from "@pacioli-app/engine";
 
 export const metadata: Metadata = {
   title: "Your Ledger · The Ledger Report",

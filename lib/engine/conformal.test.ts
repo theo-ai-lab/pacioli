@@ -8,7 +8,7 @@ import {
   type LabeledScore,
 } from "./conformal";
 import { loadSeed, loadIncidents } from "./dataset";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 // ── the keyless mismatch-score proxy ──────────────────────────────────────────────────────────────────
 

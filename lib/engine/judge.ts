@@ -20,7 +20,7 @@ import { generateText, Output } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { fence } from "./local-judge";
-import type { DiffInput, Finding } from "./types";
+import type { DiffInput, Finding } from "@pacioli-app/engine";
 
 /** The judge tier: cheap, fast, accurate JSON extraction. Escalate to sonnet only on low confidence. */
 export const JUDGE_MODEL = "claude-haiku-4-5";

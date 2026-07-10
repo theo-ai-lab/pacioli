@@ -38,8 +38,8 @@
  * Zero new dependencies; pure and deterministic, exactly like diff.ts.
  */
 
-import { diff } from "./diff";
-import type { AgentClaim, Authorization, DiffInput, MerchantEvidence, Verdict } from "./types";
+import { diff } from "@pacioli-app/engine";
+import type { AgentClaim, Authorization, DiffInput, MerchantEvidence, Verdict } from "@pacioli-app/engine";
 
 // ── verdict class ───────────────────────────────────────────────────────────────────────────────
 

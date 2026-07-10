@@ -29,7 +29,7 @@
  * boolean vote matrix and is unit-tested directly.
  */
 
-import type { DiffInput, Finding } from "./types";
+import type { DiffInput, Finding } from "@pacioli-app/engine";
 import type { JudgeFn } from "./cascade";
 import { mismatchScore } from "./conformal";
 import { resolveJudge, type JudgeMode } from "./judge-router";

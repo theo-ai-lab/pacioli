@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { judge, judgeEnabled } from "@/lib/engine/judge";
 import { checkJudgeRate } from "@/lib/ratelimit";
-import type { DiffInput, Finding } from "@/lib/engine/types";
+import type { DiffInput, Finding } from "@pacioli-app/engine";
 
 export interface JudgeResult {
   /** Whether the server has an ANTHROPIC_API_KEY. When false, the UI stays deterministic-only. */

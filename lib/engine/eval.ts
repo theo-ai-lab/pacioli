@@ -12,7 +12,7 @@
 
 import { evaluate, type ClassMetric } from "./metrics";
 import { loadSeed, loadIncidents, loadCaptured } from "./dataset";
-import { isHeadlineEligible, type GroundTruthSample } from "./types";
+import { isHeadlineEligible, type GroundTruthSample } from "@pacioli-app/engine";
 
 const pct = (x: number | null): string => (x == null ? "  –  " : x.toFixed(2));
 const cell = (m: ClassMetric): string =>

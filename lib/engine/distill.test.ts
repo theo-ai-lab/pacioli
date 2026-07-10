@@ -7,9 +7,9 @@ import {
   type DistillConfig,
 } from "./distill";
 import { consensusFromVoteMatrix, mockJury, runJury } from "./jury";
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { loadSeed, loadIncidents } from "./dataset";
-import type { DiffInput, GroundTruthSample } from "./types";
+import type { DiffInput, GroundTruthSample } from "@pacioli-app/engine";
 
 const goldCM = (r: GroundTruthSample): boolean => (r.target.findings ?? []).some((f) => f.type === "CLAIM_MISMATCH");
 

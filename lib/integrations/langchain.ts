@@ -11,8 +11,8 @@
  *     if (!receipt.balanced) escalate(receipt);   // the agent's claim didn't reconcile with the evidence
  *   }
  */
-import { buildReceipt } from "../engine/receipt";
-import type { Authorization, MerchantEvidence, Verdict } from "../engine/types";
+import { buildReceipt } from "@pacioli-app/engine";
+import type { Authorization, MerchantEvidence, Verdict } from "@pacioli-app/engine";
 
 export interface AgentRun {
   agent: string;

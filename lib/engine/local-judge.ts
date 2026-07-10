@@ -11,7 +11,7 @@
  * exactly like the API judge with no key. It is non-deterministic (the abstained LLM residual), and a
  * 3B model should be run through the calibration harness (judge-eval.ts) before it is trusted.
  */
-import type { DiffInput, Dimension, Finding, Severity } from "./types";
+import type { DiffInput, Dimension, Finding, Severity } from "@pacioli-app/engine";
 
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const LOCAL_JUDGE_MODEL = process.env.LOCAL_JUDGE_MODEL ?? "qwen2.5:3b";

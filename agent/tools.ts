@@ -22,7 +22,7 @@
  * never a raw merchant body. The reconcile step in the loop consumes that evidence directly.
  */
 
-import type { MerchantEvidence } from "../lib/engine/types";
+import type { MerchantEvidence } from "@pacioli-app/engine";
 
 // ── The HTTP-shaped seam ────────────────────────────────────────────────────────────────────────
 

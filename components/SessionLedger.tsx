@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { fingerprint } from "@/lib/engine/receipt-hash";
-import type { AgentClaim, Finding, MerchantEvidence } from "@/lib/engine/types";
+import { fingerprint } from "@pacioli-app/engine";
+import type { AgentClaim, Finding, MerchantEvidence } from "@pacioli-app/engine";
 import { Receipt } from "./Receipt";
 
 /* ── wire shapes (mirrors lib/store/receipt-store.ts + lib/api/ingest-endpoint.ts) ── */

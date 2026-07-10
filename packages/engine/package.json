@@ -1,0 +1,54 @@
+{
+  "name": "@pacioli-app/engine",
+  "version": "0.1.0",
+  "description": "Zero-dependency deterministic claim-vs-evidence reconciliation for AI agents: typed diff engine, content-addressed receipts, Merkle audit trail, executable invariant contract.",
+  "license": "MIT",
+  "author": "theo-ai-lab",
+  "homepage": "https://github.com/theo-ai-lab/pacioli/tree/main/packages/engine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/theo-ai-lab/pacioli.git",
+    "directory": "packages/engine"
+  },
+  "bugs": {
+    "url": "https://github.com/theo-ai-lab/pacioli/issues"
+  },
+  "keywords": [
+    "ai-agents",
+    "reconciliation",
+    "audit",
+    "receipts",
+    "merkle",
+    "deterministic",
+    "agent-accountability"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "prepare": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

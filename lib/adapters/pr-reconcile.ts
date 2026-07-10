@@ -36,7 +36,7 @@
  * injected MockLanguageModelV3 (NO key) — the plumbing is proven, never a fabricated number.
  */
 
-import type { DiffInput } from "../engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 import {
   reconcileStream,
   type ReconcileIncrement,

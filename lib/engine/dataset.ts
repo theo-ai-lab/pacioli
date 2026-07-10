@@ -9,7 +9,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { GroundTruthSample } from "./types";
+import type { GroundTruthSample } from "@pacioli-app/engine";
 
 const DATASET_DIR = join(process.cwd(), "dataset");
 

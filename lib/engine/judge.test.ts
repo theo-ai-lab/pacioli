@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { judge, judgeEnabled } from "./judge";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 const sample: DiffInput = {
   claim: { agent: "a", task: "t", text: "t", authorized: {} },

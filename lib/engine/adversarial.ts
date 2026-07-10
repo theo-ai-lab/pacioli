@@ -13,9 +13,9 @@
 import { generateText, Output } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { judgeEnabled, JUDGE_MODEL } from "./judge";
-import { FINDING_TYPES, type DiffInput, type FindingType } from "./types";
+import { FINDING_TYPES, type DiffInput, type FindingType } from "@pacioli-app/engine";
 
 export interface AdversarialCase {
   input: DiffInput;

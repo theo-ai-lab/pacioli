@@ -18,7 +18,7 @@
  */
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { buildReceipt } from "../engine/receipt";
+import { buildReceipt } from "@pacioli-app/engine";
 import type { ReconcileRun } from "../engine/prefix-reconcile";
 import {
   prToDiffInput,

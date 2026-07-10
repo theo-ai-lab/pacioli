@@ -14,7 +14,7 @@ import {
   type JudgeFn,
 } from "./cascade";
 import { loadSeed, loadIncidents } from "./dataset";
-import type { DiffInput, Finding, GroundTruthSample } from "./types";
+import type { DiffInput, Finding, GroundTruthSample } from "@pacioli-app/engine";
 
 // ── fixtures ───────────────────────────────────────────────────────────────────────────────────────
 

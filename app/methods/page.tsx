@@ -5,10 +5,10 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { MetricsTable } from "@/components/MetricsTable";
 import { evaluate } from "@/lib/engine/metrics";
 import { loadSeed, loadIncidents, loadCaptured } from "@/lib/engine/dataset";
-import { isHeadlineEligible } from "@/lib/engine/types";
+import { isHeadlineEligible } from "@pacioli-app/engine";
 import { fuzz } from "@/lib/engine/fuzz";
 import { fuzzMetamorphic, METAMORPHIC_PROPERTIES } from "@/lib/engine/metamorphic";
-import { INVARIANTS } from "@/lib/engine/spec";
+import { INVARIANTS } from "@pacioli-app/engine";
 import { rateWithCI } from "@/lib/engine/judge-eval";
 
 export const metadata: Metadata = {

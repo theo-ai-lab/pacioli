@@ -7,8 +7,8 @@
  * tsx, which does not resolve the app's `@/` tsconfig alias.)
  */
 
-import { buildReceipt } from "../lib/engine/receipt";
-import type { DiffInput } from "../lib/engine/types";
+import { buildReceipt } from "@pacioli-app/engine";
+import type { DiffInput } from "@pacioli-app/engine";
 
 export interface ReconcileArgs {
   agent: string;

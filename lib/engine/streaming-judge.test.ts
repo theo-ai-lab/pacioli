@@ -10,7 +10,7 @@ import {
   StreamJudgeSchema,
   type StreamJudgeVerdict,
 } from "./streaming-judge";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 // ── a mock model that streams a JSON object out as token-ish text deltas (NO API key) ──────────
 const USAGE: LanguageModelV3Usage = {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { adversarialAudit, type AdversarialCase } from "./adversarial";
-import type { Authorization, DiffInput, MerchantEvidence } from "./types";
+import type { Authorization, DiffInput, MerchantEvidence } from "@pacioli-app/engine";
 
 const mk = (authorized: Authorization, ev: Partial<MerchantEvidence>): DiffInput => ({
   claim: { agent: "x", task: "t", text: "c", authorized },

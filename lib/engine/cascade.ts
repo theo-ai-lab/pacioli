@@ -39,9 +39,9 @@
  * Zero new dependencies; the cheap tier stays pure and deterministic.
  */
 
-import { canonicalJSON } from "./crypto";
-import { diff } from "./diff";
-import type { DiffInput, Finding, GroundTruthSample, Verdict } from "./types";
+import { canonicalJSON } from "@pacioli-app/engine";
+import { diff } from "@pacioli-app/engine";
+import type { DiffInput, Finding, GroundTruthSample, Verdict } from "@pacioli-app/engine";
 
 // ── regime + locus labels (the suite-wide gate taxonomy) ──────────────────────────────────────────
 
@@ -69,7 +69,7 @@ export interface CascadeBoundary {
 export const CLAIM_CASCADE: CascadeBoundary = {
   id: "deterministic-rules->llm-judge",
   cheap: {
-    name: "deterministic rules (lib/engine/diff.ts)",
+    name: "deterministic rules (packages/engine/src/diff.ts)",
     regime: "model-free-provable",
     locus: "claim",
   },

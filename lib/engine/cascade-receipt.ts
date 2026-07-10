@@ -10,9 +10,9 @@
  * Zero dependencies (Web Crypto via crypto.ts); pure.
  */
 
-import { canonicalJSON, sha256Hex } from "./crypto";
+import { canonicalJSON, sha256Hex } from "@pacioli-app/engine";
 import { EQUIV_CASCADE, type CascadeMetrics } from "./cascade";
-import { fingerprint } from "./receipt-hash";
+import { fingerprint } from "@pacioli-app/engine";
 
 export interface CascadeReceipt {
   /** The named relation this receipt witnesses. */

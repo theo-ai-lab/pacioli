@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
 import type { LanguageModelV3StreamPart, LanguageModelV3Usage } from "@ai-sdk/provider";
 import { prToDiffInput, prToIncrements, reconcilePullRequest, type PullRequestClaim } from "./pr-reconcile";
-import { diff } from "../engine/diff";
+import { diff } from "@pacioli-app/engine";
 import { streamJudge } from "../engine/streaming-judge";
 
 describe("pr-reconcile — claim mapping", () => {

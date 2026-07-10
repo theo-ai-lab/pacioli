@@ -7,7 +7,7 @@
  * is still false — the CLAIM_MISMATCH residual that only the LLM judge catches.
  */
 
-import type { AgentClaim, Finding, MerchantEvidence } from "@/lib/engine/types";
+import type { AgentClaim, Finding, MerchantEvidence } from "@pacioli-app/engine";
 
 export interface Example {
   id: string;

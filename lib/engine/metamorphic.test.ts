@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { metamorphicViolations, fuzzMetamorphic, METAMORPHIC_PROPERTIES } from "./metamorphic";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 describe("metamorphic properties", () => {
   it("holds every relation over 20k generated cases (fuzzed)", () => {

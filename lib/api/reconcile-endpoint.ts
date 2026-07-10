@@ -6,9 +6,9 @@
  * adds the optional shared-secret check and wires Request/Response around this.
  */
 import { z } from "zod";
-import { buildReceipt } from "../engine/receipt";
+import { buildReceipt } from "@pacioli-app/engine";
 import { resolveJudge, type JudgeMode } from "../engine/judge-router";
-import type { DiffInput, Finding, FindingType } from "../engine/types";
+import type { DiffInput, Finding, FindingType } from "@pacioli-app/engine";
 
 // Shared sub-schemas — the single-claim and the batch (claims-array) bodies reuse the SAME
 // authorization + evidence shapes so the two surfaces can never drift.

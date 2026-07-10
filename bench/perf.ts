@@ -6,7 +6,7 @@
  * change that accidentally makes the hot path slow. Run: `npm run bench:perf` (add `--gate` in CI).
  */
 import { performance } from "node:perf_hooks";
-import { diff } from "../lib/engine/diff";
+import { diff } from "@pacioli-app/engine";
 import { loadSeed, loadIncidents } from "../lib/engine/dataset";
 
 const corpus = [...loadSeed(), ...loadIncidents()].map((s) => s.input);

@@ -9,9 +9,9 @@ import {
   isHighConsensusMismatch,
   DEFAULT_CONSENSUS_GATE,
 } from "./jury";
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { loadSeed, loadIncidents } from "./dataset";
-import type { DiffInput } from "./types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 // ── the honesty core: correlation-corrected EFFECTIVE votes, not member count ─────────────────────────────
 

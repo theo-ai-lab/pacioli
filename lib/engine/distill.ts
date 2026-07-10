@@ -36,7 +36,7 @@ import {
   type ConsensusGate,
   type JuryConsensus,
 } from "./jury";
-import type { DiffInput, Finding, GroundTruthSample } from "./types";
+import type { DiffInput, Finding, GroundTruthSample } from "@pacioli-app/engine";
 
 // ── the candidate-atom library: transparent, keyless, STRUCTURALLY-EXPLAINABLE boolean predicates ─────────
 

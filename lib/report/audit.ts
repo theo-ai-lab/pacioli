@@ -5,8 +5,8 @@
  * a shape the SARIF / JUnit reporters can serialize — so the same engine that prints a receipt can also
  * GATE a CI pipeline (the "prevent" role). Pure: just diff() over a list, no IO here.
  */
-import { diff } from "../engine/diff";
-import type { DiffInput, Verdict } from "../engine/types";
+import { diff } from "@pacioli-app/engine";
+import type { DiffInput, Verdict } from "@pacioli-app/engine";
 
 /** Surfaced as the audit tool version in SARIF/JUnit. Bump when rule behavior changes. */
 export const ENGINE_VERSION = "0.1.0";

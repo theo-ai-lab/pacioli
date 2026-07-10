@@ -6,7 +6,7 @@
  */
 import type { AuditResult } from "./audit";
 import { ENGINE_VERSION } from "./audit";
-import { FINDING_TYPES, type FindingType, type Severity } from "../engine/types";
+import { FINDING_TYPES, type FindingType, type Severity } from "@pacioli-app/engine";
 
 // Keyed by FindingType so a fifth finding class FAILS THE BUILD here instead of emitting SARIF
 // results whose ruleId references no declared rule (the runtime-derivation contract in types.ts).

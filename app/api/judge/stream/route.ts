@@ -17,7 +17,7 @@ import { z } from "zod";
 import { streamJudge, streamingJudgeEnabled } from "@/lib/engine/streaming-judge";
 import { checkJudgeRate } from "@/lib/ratelimit";
 import { readBodyCapped } from "@/lib/api/auth";
-import type { DiffInput } from "@/lib/engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 // Same bounded contract as the runJudge action — unknown keys stripped, every field length-capped, so
 // an oversized prompt can't be used to run up cost / DoS the paid judge.

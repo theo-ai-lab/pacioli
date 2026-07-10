@@ -2,7 +2,7 @@
  * Pacioli — judge calibration CLI. `npm run calibrate` (HUMAN-GATED: needs ANTHROPIC_API_KEY).
  *
  * An LLM judge is a measurement instrument; you do not trust it until you have measured it
- * against the human labels. The deterministic engine (lib/engine/diff.ts) resolves OVERSPEND /
+ * against the human labels. The deterministic engine (packages/engine/src/diff.ts) resolves OVERSPEND /
  * UNAUTH_RECURRENCE / SCOPE_CREEP and ABSTAINS on the fuzzy CLAIM_MISMATCH residual by design —
  * that residual is the judge's whole job. So this harness runs the gated Anthropic judge over
  * exactly the rows the engine abstains on (diff() returns no findings), labels each
@@ -19,10 +19,10 @@
  */
 
 import { loadSeed, loadIncidents } from "./dataset";
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { judge, judgeEnabled, JUDGE_MODEL } from "./judge";
 import { calibrate, rateWithCI, wilsonInterval } from "./judge-eval";
-import type { GroundTruthSample } from "./types";
+import type { GroundTruthSample } from "@pacioli-app/engine";
 
 /** Below this, a κ is not statistically meaningful — report raw agreement only. */
 const MIN_N_FOR_KAPPA = 30;

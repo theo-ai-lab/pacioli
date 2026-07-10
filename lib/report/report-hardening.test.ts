@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { toCase, type AuditResult } from "./audit";
 import { toJUnit } from "./junit";
 import { toSarif } from "./sarif";
-import type { DiffInput } from "../engine/types";
+import type { DiffInput } from "@pacioli-app/engine";
 
 const goodInput: DiffInput = {
   claim: { agent: "a", task: "book", text: "booked", authorized: { budgetUsd: 300, mayPurchase: true } },

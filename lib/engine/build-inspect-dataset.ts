@@ -9,7 +9,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { loadSeed } from "./dataset";
 
 const rows = loadSeed().filter((r) => !r.target.unscorable);

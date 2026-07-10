@@ -6,7 +6,7 @@
  * dangerous tool with no human-approval gate. Pure, zero-dep; drop into CI and fail the build on any
  * high/critical finding.
  */
-import type { Authorization } from "./types";
+import type { Authorization } from "@pacioli-app/engine";
 import type { ToolPolicy } from "./tooluse";
 
 export interface AgentConfig {

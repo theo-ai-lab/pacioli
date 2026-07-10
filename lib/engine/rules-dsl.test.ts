@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { diff } from "./diff";
+import { diff } from "@pacioli-app/engine";
 import { applyRules } from "./rules-dsl";
 import { genInput, mulberry32 } from "./fuzz";
 import { loadSeed, loadIncidents } from "./dataset";
-import type { DiffInput, FindingType } from "./types";
+import type { DiffInput, FindingType } from "@pacioli-app/engine";
 
 // The DSL covers only the numeric/flag rules; compare those classes against the engine.
 const NUMERIC: FindingType[] = ["OVERSPEND", "UNAUTH_RECURRENCE"];

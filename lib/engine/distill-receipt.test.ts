@@ -6,7 +6,7 @@ import {
   provePromotion,
   verifyPromotionInclusion,
 } from "./distill-receipt";
-import { merkleRoot } from "./merkle";
+import { merkleRoot } from "@pacioli-app/engine";
 import type { PromotedRule } from "./distill";
 
 const rule = (atom: string, eff: number): PromotedRule => ({
