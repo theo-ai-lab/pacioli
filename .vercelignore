@@ -13,6 +13,9 @@ coverage
 screenshots
 *.log
 *.tsbuildinfo
+# Raw captures never upload; the redacted dataset/captured.public.jsonl (from
+# `npm run capture:publish`) deliberately DOES ship — it is how the deployed
+# /methods page renders the headline-eligible rows without the personal data.
 dataset/captured.jsonl
 bench/tau2/.cache
 .venv

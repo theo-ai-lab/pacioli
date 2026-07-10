@@ -40,7 +40,10 @@ __pycache__/
 npm-debug.log*
 *.log
 
-# ── provenance firewall: real captured runs are personal data and never ship ──
+# ── provenance firewall: RAW captured runs are personal data and never ship.
+#    The committed public form is dataset/captured.public.jsonl — the redacted
+#    projection emitted by `npm run capture:publish` (contract fields + a short
+#    no-PII excerpt only), which is what makes the headline rate stranger-verifiable ──
 dataset/captured.jsonl
 
 # ── scratch screenshots (keep deliberate assets in public/) ──

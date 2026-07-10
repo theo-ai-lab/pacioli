@@ -13,6 +13,18 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-07-10) Capture publish path (`npm run capture:publish`): projects the
+  raw private capture corpus (`dataset/captured.jsonl`, gitignored) down to the
+  contract fields only, runs every free-text field through a PII redactor
+  (emails, URLs, card/phone/confirmation numbers), validates every structured
+  field against the contract (ISO date, finite money, enum
+  sources/dimensions/severities), enforces the short-excerpt
+  rule and the `[SYNTHETIC]` firewall, and emits the committed
+  `dataset/captured.public.jsonl` — the redacted corpus that lets the deployed
+  `/methods` page render the headline-eligible rows and lets a stranger
+  re-score the rate. The dataset loader falls back to the published corpus when
+  no raw captures exist. No capture runs have been made yet, so the file is
+  absent and the headline rate remains honestly pending.
 - (2026-07-10) Release workflow (`.github/workflows/release.yml`): fires only on
   version tags (`v*.*.*`); re-runs the gauntlet plus the install smoke at the
   tag, guards that the tag equals the engine package version, publishes
@@ -69,6 +81,9 @@ the changes landed on `main`.
 
 ### Changed
 
+- (2026-07-10) `/methods`, the capture docs, and the ignore files describe the
+  redacted-publish path instead of "real captures are never committed": raw
+  captures stay private, the redacted projection is what ships.
 - (2026-06-18) README re-led as a product (How it works → Use it → Wire it into
   your pipeline → Ledger Report → Why this approach); the audit-rigor block moved
   into a later "How it's verified" section. Prose preserved, order changed.

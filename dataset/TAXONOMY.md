@@ -67,7 +67,9 @@ Rows carry a `provenance`, and it gates how they may be used:
 filter through them. A synthetic row that leaks into a reported number turns you into
 the thing this product detects. Files mirror the firewall: synthetic lives in
 `ground-truth.seed.jsonl` (tracked), public incidents in `incidents.jsonl` (tracked),
-your real personal captures in `captured.jsonl` (gitignored).
+your real personal captures in `captured.jsonl` (gitignored, raw) with their committed
+redacted projection in `captured.public.jsonl` (`npm run capture:publish` — contract
+fields + a short no-PII excerpt only).
 
 > Provenance must be **true**. A fabricated confirmation labeled `self-run` is the
 > worst possible contamination — never emit one. (This is also why every `[SYNTHETIC]`

@@ -27,8 +27,12 @@ the whole build. This single asset does **four jobs**:
   Instacart, Epic, Wells Fargo, Adobe, …), provenance `regulatory-precedent`. The *pre-agent*
   regulatory landscape — context, NOT autonomous-agent failures. The distinct provenance (not
   a filename) is what excludes it: no firewall predicate folds it into the incident class.
-- `captured.jsonl` — **real self-run captures** (gitignored). The only source eligible
-  for the headline agent-misbehavior rate.
+- `captured.jsonl` — **real self-run captures, raw** (gitignored; free text can carry PII).
+  The only source eligible for the headline agent-misbehavior rate.
+- `captured.public.jsonl` — the **committed redacted projection** of those runs, emitted by
+  `npm run capture:publish` (contract fields + a short no-PII excerpt only). How the deployed
+  site — and any stranger re-scoring the rate — sees the headline-eligible rows. Absent until
+  real runs exist; the rate stays honestly `pending` until then.
 
 ## Coverage (seed)
 

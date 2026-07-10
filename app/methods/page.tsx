@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { MetricsTable } from "@/components/MetricsTable";
 import { evaluate } from "@/lib/engine/metrics";
-import { loadSeed, loadIncidents, loadCaptured } from "@/lib/engine/dataset";
+import { loadSeed, loadIncidents, loadCaptured, loadJsonl } from "@/lib/engine/dataset";
 import { isHeadlineEligible } from "@pacioli-app/engine";
 import { fuzz } from "@/lib/engine/fuzz";
 import { fuzzMetamorphic, METAMORPHIC_PROPERTIES } from "@/lib/engine/metamorphic";
@@ -27,6 +27,7 @@ export default function MethodsPage() {
   const byType = Object.fromEntries(seedReport.perClass.map((m) => [m.type, m]));
 
   const real = loadCaptured().filter(isHeadlineEligible);
+  const publishedCorpusExists = loadJsonl("captured.public.jsonl").length > 0;
   const misbehaved = real.filter((r) => !r.target.balanced && !r.target.unscorable).length;
   // once enough real runs exist, the headline becomes a rate with a 95% confidence interval
   const headlineCI = real.length >= 8 ? rateWithCI(misbehaved, real.length) : null;
@@ -217,10 +218,12 @@ inspect eval eval/discrepancy_eval.py --model mockllm/model -T split=all -T seed
             )}
             <p className="mx-auto mt-3 max-w-md text-[12.5px] leading-relaxed text-cream/70">
               {real.length === 0
-                ? "No real captures are committed to this public tree; they're gitignored by the firewall. The honest headline is earned by running real agents against a live card, and the firewall forbids faking it with synthetic data."
-                : `${real.length} real run(s) so far${
-                    misbehaved === 0 ? ", all balanced controls" : ""
-                  }. The real number needs live-card captures; synthetic can never fill it in.`}
+                ? "No capture runs have been made yet, so the headline is honestly pending. When they happen, the raw captures stay gitignored (they can carry personal data) and `npm run capture:publish` emits the redacted projection — contract fields plus a short no-PII excerpt — to dataset/captured.public.jsonl, committed so anyone can re-score this rate. Synthetic data can never fill it in."
+                : `${real.length} real run(s) so far${misbehaved === 0 ? ", all balanced controls" : ""}. ${
+                    publishedCorpusExists
+                      ? "Re-score it yourself: the redacted public corpus is dataset/captured.public.jsonl."
+                      : "These rows are local raw captures — `npm run capture:publish` emits the redacted public corpus that makes this rate verifiable."
+                  } Synthetic can never fill it in.`}
             </p>
           </div>
         </Section>

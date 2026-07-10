@@ -156,7 +156,10 @@ Two things this table is *not* hiding:
    That's the argument for deterministic-first: be exact where you can be, don't guess where you can't.
 2. **There is no "agents misbehave X%" headline yet.** That number can only come from real runs commissioned
    against a live card (`self-run`/`gmail` provenance). A provenance *firewall* in the code forbids filling it
-   with synthetic or third-party data. It is pending, on purpose.
+   with synthetic or third-party data. It is pending, on purpose. When the runs happen, raw captures stay
+   private and `npm run capture:publish` emits their redacted projection (contract fields + a short no-PII
+   excerpt) as the committed `dataset/captured.public.jsonl` — so the number will be re-scorable by a
+   stranger, not taken on faith.
 
 Nothing above is a number in prose. Reproduce it:
 
