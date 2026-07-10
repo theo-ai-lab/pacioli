@@ -1,0 +1,61 @@
+# Changelog
+
+All notable changes to Pacioli are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+No version has been tagged yet: `v0.1.0` (pending) will be the first tagged
+release and will contain everything below. Dates in parentheses are the dates
+the changes landed on `main`.
+
+## [Unreleased]
+
+### Added
+
+- (2026-06-12) Pacioli v1 — claim-vs-evidence reconciliation for AI agents: the
+  zero-dependency deterministic diff engine with the citation invariant enforced
+  at the type level, SHA-256 content-addressed receipts, a Merkle audit trail,
+  the executable invariant contract (`SPEC.md` + `checkInvariants`) with a seeded
+  fuzzer, the labeled ground-truth dataset with a provenance firewall, the eval
+  harness, and the Next.js demo app.
+- (2026-06-14) Judge calibration CLI (Cohen's kappa for the gated judge over the
+  engine's CLAIM_MISMATCH residual), `docs/RELATED_WORK.md`, and the
+  reproduced-results snapshot `eval/RESULTS.md`.
+- (2026-06-17 – 2026-06-18) Product loop and reachable engine surfaces: streamed
+  judge UI, per-session ledger loop (`/ledger`, `/api/ingest`, `/api/ledger`),
+  ingestion route, Steward agent, prefix reconciliation with the RECON-MR
+  metamorphic relation, PR adapter (`npm run reconcile:pr -- --gate`), MCP tools
+  `reconcile_pr` and `reconcile_stream`, `/api/reconcile` batch seam with a CORS
+  allowlist, and an optional deterministic Plimsoll governor gate under the
+  Steward.
+- (2026-06-19) Falsifiable deterministic-first cascade: the EQUIV-CASCADE
+  equivalence relation measured (not asserted) over the labeled corpus with
+  telemetry, the keyless judge sample-k saturation curve, and a split-conformal
+  calibrated residual band on CLAIM_MISMATCH; judge-jury distillation into the
+  deterministic floor (correlation-corrected effective votes, holdout-gated rule
+  promotion, Merkle-receipted provenance) and a selective-risk certificate
+  (Clopper–Pearson upper bound) on the residual judge; reconcile CLI modes
+  `--equivalence`, `--saturation`, `--conformal`, `--distill`, `--certify`.
+- (2026-07-05) `/api/version` reporting the deployed commit, captured at
+  deploy-prep time by `scripts/predeploy.mjs` (refuses dirty trees); the
+  deploy-parity workflow — the live demo must serve `main`, with side-effect-free
+  probes of the documented routes; `eval/RESULTS.md` made a machine-regenerated
+  snapshot (`npm run eval:snapshot`) gated byte-for-byte in CI.
+
+### Changed
+
+- (2026-06-18) README re-led as a product (How it works → Use it → Wire it into
+  your pipeline → Ledger Report → Why this approach); the audit-rigor block moved
+  into a later "How it's verified" section. Prose preserved, order changed.
+- (2026-06-14) GitHub Actions bumped to latest majors (Node 24 runtime).
+- (2026-06-20) Cascade alpha headline rounded honestly (~40%, matching the
+  measured 39.6%).
+- (2026-06-19) MCP smoke-test description corrected to all three tools;
+  cross-origin batch caller example generalized in comments.
+- (2026-07-06) Deploy-parity workflow comments describe the probe list precisely
+  (README-named routes plus the API routes the demo pages call).
+
+### Fixed
+
+- (2026-06-12) Lockfile regenerated so `npm ci` validates across npm versions.
