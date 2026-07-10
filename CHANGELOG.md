@@ -81,6 +81,16 @@ the changes landed on `main`.
 
 ### Changed
 
+- (2026-07-10) README restructured for scan: the top third names the single
+  intended user (the agent developer receipting every agent PR and purchase in
+  CI) and adds a three-step "Add it to your agent stack in 5 minutes" wedge —
+  install lines honestly labeled npm-publish-pending, `npx` pinned
+  `--no-install` because the bare registry name belongs to an unrelated
+  project. The MCP and pipeline prose collapsed into a one-row-per-surface
+  table ("One engine, every surface"), and the "Verifiable by construction"
+  bullet wall into a claim/mechanism/reproduce/source table; the full depth
+  moved verbatim to the new `docs/VERIFICATION.md` (mechanisms + exact surface
+  contracts). No number changed.
 - (2026-07-10) `/methods`, the capture docs, and the ignore files describe the
   redacted-publish path instead of "real captures are never committed": raw
   captures stay private, the redacted projection is what ships.
