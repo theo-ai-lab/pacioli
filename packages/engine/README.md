@@ -56,6 +56,25 @@ const receipt = await buildReceipt(input);
 // receipt.receiptId: "sha256:<first 16 hex of the content hash>"
 ```
 
+## CLI
+
+The package ships a `pacioli` executable over the same deterministic core. The
+exit code is the verdict, so one command gates a pipeline:
+
+```sh
+pacioli reconcile input.json          # human-readable receipt
+pacioli reconcile - --json < in.json  # full receipt as JSON, input from stdin
+```
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | balanced — the books reconcile |
+| `1` | out of balance — at least one cited finding |
+| `2` | usage, I/O, or validation error (nothing was reconciled) |
+
+Deterministic rules only: `CLAIM_MISMATCH` is an explicit abstention here. The
+LLM judge lives in the app, behind a key — never in this package.
+
 ## What stays in the app
 
 The LLM judge, the jury/distillation research harness, the eval dataset, the

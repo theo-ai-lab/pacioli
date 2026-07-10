@@ -8,7 +8,9 @@
  *   - `merkleRoot` / `merkleProof` / `verifyProof`  — the Merkle audit trail
  *   - `checkInvariants` — the engine contract (SPEC.md) as executable predicates
  *
- * Zero runtime dependencies. Web Crypto only (Node 20+ and all modern browsers).
+ * Zero runtime dependencies. The library is Web Crypto only (Node 20+ and all
+ * modern browsers); the `pacioli` CLI (src/bin.ts → dist/bin.js) is the one
+ * Node-specific surface and is not exported from here.
  */
 
 export * from "./types";

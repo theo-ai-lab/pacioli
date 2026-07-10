@@ -13,6 +13,11 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-07-10) The `pacioli` CLI, shipped as the bin of `@pacioli-app/engine`:
+  `pacioli reconcile <input.json | -> [--json]` runs the deterministic engine
+  over a `{claim, evidence}` input and prints the receipt; the exit code is the
+  verdict (0 balanced, 1 out of balance, 2 error), so one command gates a
+  pipeline.
 - (2026-07-10) `@pacioli-app/engine` npm workspace (`packages/engine`): the
   zero-dependency deterministic core — `diff`, the typed contract, receipts,
   content addressing, the Merkle audit trail, and the executable invariant
