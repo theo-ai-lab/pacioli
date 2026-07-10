@@ -22,6 +22,21 @@ jobs:
       - run: npm run eval:snapshot && git diff --exit-code eval/RESULTS.md # frozen eval/RESULTS.md must reproduce byte-for-byte
       - run: npm run build
 
+  install-smoke:
+    # Installability is a re-proven gate, like the eval snapshot: pack
+    # @pacioli-app/engine exactly as `npm publish` would, install the tarball in
+    # a fresh consumer dir, require() it and reconcile, and hold the CLI to its
+    # documented --help and exit-code contract.
+    name: engine pack → install → require + CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run smoke:install
+
   inspect-eval:
     name: Inspect AI eval (citable harness)
     runs-on: ubuntu-latest

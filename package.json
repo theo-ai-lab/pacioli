@@ -37,7 +37,8 @@
     "bench:perf": "tsx bench/perf.ts",
     "bench:ale": "tsx bench/ale/run.ts",
     "capture": "node dataset/capture/capture.mjs",
-    "capture:validate": "node dataset/capture/validate.mjs"
+    "capture:validate": "node dataset/capture/validate.mjs",
+    "smoke:install": "bash scripts/install-smoke.sh"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",

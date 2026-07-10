@@ -13,6 +13,11 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-07-10) CI install-smoke gate (`npm run smoke:install`): every push packs
+  `@pacioli-app/engine` exactly as `npm publish` would, installs the tarball in
+  a fresh consumer directory, `require()`s it and reconciles, and holds the CLI
+  to its documented `--help` and exit-code contract — installability is
+  re-proven continuously, not claimed once.
 - (2026-07-10) The `pacioli` CLI, shipped as the bin of `@pacioli-app/engine`:
   `pacioli reconcile <input.json | -> [--json]` runs the deterministic engine
   over a `{claim, evidence}` input and prints the receipt; the exit code is the
