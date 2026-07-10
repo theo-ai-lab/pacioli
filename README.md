@@ -65,6 +65,9 @@ transport (413 past 64KB, even chunked). Errors: `400` bad JSON · `401` bad key
 (true event counter — replays of the same content-addressed receipt each count), `pacioli_receipts_unique`,
 `pacioli_receipts_flagged`, `pacioli_findings_by_type{type=…}`, and `pacioli_store_info{backend=…}` so you
 can see whether you're on durable `sqlite` (set `PACIOLI_DB=/path/receipts.db`) or the in-memory fallback.
+The deployed demo sets no `PACIOLI_DB`, so it runs the in-memory store **by design** — receipts are
+per-instance and reset on each deploy; `backend="memory"` on the live `/api/metrics` is the honest
+reading, not a failure.
 
 **Deploy parity.** `GET /api/version` reports the exact commit a deployment serves (`{ sha, builtAt, version }`
 — deliberately unauthenticated, so anyone can check it). The sha is captured by `npm run deploy` **before** the
@@ -97,7 +100,7 @@ with a latency regression gate.
 | `ANTHROPIC_API_KEY` | enables the hosted judge |
 | `OLLAMA_URL` / `LOCAL_JUDGE_MODEL` | the on-device judge (defaults: `localhost:11434`, `qwen2.5:3b`) |
 | `PACIOLI_API_KEY` | requires `x-api-key` on the API + metrics; unlocks judge selection over HTTP |
-| `PACIOLI_DB` | durable receipt store via Node's built-in sqlite |
+| `PACIOLI_DB` | durable receipt store via Node's built-in sqlite (unset — as on the deployed demo — = in-memory by design) |
 | `ALE_DATASET` | live dataset id for the external-benchmark adapter (`npm run bench:ale`) |
 
 ## The Ledger Report

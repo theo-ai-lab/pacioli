@@ -84,6 +84,10 @@ the changes landed on `main`.
 - (2026-07-10) `/methods`, the capture docs, and the ignore files describe the
   redacted-publish path instead of "real captures are never committed": raw
   captures stay private, the redacted projection is what ships.
+- (2026-07-10) README states plainly that the deployed demo runs the in-memory
+  receipt store by design (`PACIOLI_DB` unset — receipts are per-instance and
+  reset on deploy), so `backend="memory"` on the live `/api/metrics` reads as
+  intended behavior.
 - (2026-06-18) README re-led as a product (How it works → Use it → Wire it into
   your pipeline → Ledger Report → Why this approach); the audit-rigor block moved
   into a later "How it's verified" section. Prose preserved, order changed.
