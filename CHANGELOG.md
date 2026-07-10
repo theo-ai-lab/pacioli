@@ -13,6 +13,12 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-07-10) Release workflow (`.github/workflows/release.yml`): fires only on
+  version tags (`v*.*.*`); re-runs the gauntlet plus the install smoke at the
+  tag, guards that the tag equals the engine package version, publishes
+  `@pacioli-app/engine` to npm with provenance via OIDC trusted publishing (no
+  long-lived token), and cuts the GitHub release. The npm-side trusted-publisher
+  configuration is pending until the first release.
 - (2026-07-10) CI install-smoke gate (`npm run smoke:install`): every push packs
   `@pacioli-app/engine` exactly as `npm publish` would, installs the tarball in
   a fresh consumer directory, `require()`s it and reconciles, and holds the CLI

@@ -1,0 +1,83 @@
+# Pacioli — release: version tag → verified npm publish (with provenance) + GitHub release.
+#
+# Fires ONLY when a version tag (v0.1.0, v1.2.3-rc.1, …) is pushed. `on.push.tags`
+# with no `branches` key matches tag refs exclusively — branch pushes, pull
+# requests, schedules, and manual dispatch cannot trigger this workflow, and the
+# publish job additionally refuses any ref that is not a v* tag.
+#
+# Publishing uses npm trusted publishing (OIDC): the job's id-token is exchanged
+# for short-lived npm credentials and a signed provenance statement — no
+# long-lived NPM_TOKEN secret exists. ONE-TIME SETUP (pending until the first
+# release): configure the trusted publisher for @pacioli-app/engine on
+# npmjs.com → package → Settings → Trusted publisher
+# (GitHub Actions, repository theo-ai-lab/pacioli, workflow release.yml).
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: gauntlet at the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run smoke:install # the exact artifact being released must install fresh
+      - name: tag must equal the engine package version
+        run: |
+          node -e '
+            const v = require("./packages/engine/package.json").version;
+            const tag = process.env.GITHUB_REF_NAME;
+            if (tag !== "v" + v) {
+              console.error("tag " + tag + " does not match packages/engine version v" + v);
+              process.exit(1);
+            }
+            console.log("tag matches packages/engine version: " + tag);
+          '
+
+  publish:
+    name: npm publish @pacioli-app/engine (provenance via OIDC)
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/v') # belt and suspenders — see header
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # exchanged by npm for trusted-publishing credentials + provenance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm ci --no-audit --no-fund
+      - run: npm publish -w packages/engine --provenance --access public
+
+  github-release:
+    name: GitHub release for the tag
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Curated changes: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md). npm package: [@pacioli-app/engine](https://www.npmjs.com/package/@pacioli-app/engine)."
