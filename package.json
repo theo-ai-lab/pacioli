@@ -38,6 +38,7 @@
     "bench:ale": "tsx bench/ale/run.ts",
     "capture": "node dataset/capture/capture.mjs",
     "capture:validate": "node dataset/capture/validate.mjs",
+    "capture:publish": "node dataset/capture/publish.mjs",
     "smoke:install": "bash scripts/install-smoke.sh"
   },
   "dependencies": {

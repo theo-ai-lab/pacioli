@@ -17,6 +17,8 @@ export default defineConfig({
       "agent/**/*.test.ts",
       "scripts/**/*.test.ts",
       "packages/*/src/**/*.test.ts",
+      // The capture kit is deliberately zero-dep plain-node .mjs; its tests match.
+      "dataset/**/*.test.mjs",
     ],
   },
 });
