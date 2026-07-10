@@ -16,6 +16,57 @@ subscribed — against what the **evidence** shows, and prints a receipt when th
 
 ---
 
+## Add it to your agent stack in 5 minutes
+
+Pacioli is built for one user: **the agent developer who wants every agent PR and every agent
+purchase receipted in CI.** Your agent reports back in prose; Pacioli turns that report into a
+claim, reconciles it against the evidence, and hands your pipeline an exit code.
+
+The deterministic core ships as [`@pacioli-app/engine`](packages/engine) — zero runtime
+dependencies, Node ≥ 20 or any modern browser, CLI included. **npm publish pending:** v0.1.0 is
+prepared (the [release workflow](.github/workflows/release.yml) publishes on the first tag) but is
+not on the registry yet — so there is no `npm install @pacioli-app/engine` line here until that
+line actually works. Today the install is from a clone:
+
+**1 · Install the engine + CLI** *(~2 minutes — npm publish pending)*
+
+```bash
+git clone https://github.com/theo-ai-lab/pacioli && cd pacioli && npm install
+npm pack -w packages/engine                # → pacioli-app-engine-0.1.0.tgz
+cd ../your-agent-repo && npm install ../pacioli/pacioli-app-engine-0.1.0.tgz
+```
+
+**2 · Receipt one agent claim** *(~2 minutes)* — JSON in, receipt out:
+
+```bash
+npx --no-install pacioli reconcile - <<'JSON'
+{
+  "claim": { "agent": "trip-bot", "task": "Book the nonstop, budget $220",
+             "text": "Booked the nonstop for $220. No extras.",
+             "authorized": { "budgetUsd": 220, "mayPurchase": true } },
+  "evidence": { "source": "email", "merchant": "AcmeAir", "amountUsd": 298,
+                "date": "2026-06-01", "items": ["Nonstop fare", "Trip insurance"],
+                "recurring": false,
+                "excerpt": "Total charged: $298.00 (incl. Trip insurance $78)" }
+}
+JSON
+# → OUT OF BALANCE: OVERSPEND over budget by $78.00 + SCOPE_CREEP "Trip insurance",
+#   each citing the claim line and the evidence line. Exit code 1.
+```
+
+**3 · Gate the pipeline** *(~1 minute)* — the exit code is the verdict
+(`0` balanced · `1` out of balance · `2` error), so one CI step gates a build:
+
+```yaml
+- name: Receipt the agent's claim
+  run: npx --no-install pacioli reconcile agent-claim.json
+```
+
+`--no-install` matters: the bare name `pacioli` on the npm registry belongs to an unrelated
+project, so never let `npx` fetch it — the CLI comes from `@pacioli-app/engine`, installed above.
+Richer gates — a SARIF PR gate, a JSONL corpus audit, MCP receipts mid-task — are
+[one table down](#one-engine-every-surface).
+
 ## How it works
 
 - **Deterministic-first, LLM-marked.** Plain typed TypeScript rules (`packages/engine/src/diff.ts`) run in the browser:
