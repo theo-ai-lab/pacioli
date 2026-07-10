@@ -409,7 +409,7 @@ function LedgerHistory({
                 <span className="min-w-0 flex-1 truncate font-serif text-[15px] text-cream">{r.merchant || "—"}</span>
                 <span className="font-mono text-[11px] text-cream-dim">{r.agent}</span>
                 {r.findingTypes.map((t) => (
-                  <span key={t} className="rounded-sm border border-oxblood/40 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-oxblood">
+                  <span key={t} className="rounded-sm border border-oxblood/40 px-1.5 py-0.5 font-mono text-[0.625rem] uppercase tracking-wide text-oxblood">
                     {t}
                   </span>
                 ))}

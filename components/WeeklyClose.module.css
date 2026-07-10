@@ -1,4 +1,5 @@
-/* Pacioli — Weekly Close (Z-Report). Bone-paper digest; tokens from app/globals.css. */
+/* Pacioli — Weekly Close (Z-Report). Bone-paper digest; tokens from app/globals.css.
+   Rem-based type on the shared fine-print floor: >= 0.59375rem (9.5px), DESIGN.md §2. */
 
 .zclose {
   width: min(92vw, 384px);
@@ -53,21 +54,21 @@
   border-bottom: 1px dashed var(--rule);
 }
 .k {
-  font-size: 8.5px;
+  font-size: 0.625rem;
   letter-spacing: 0.34em;
   text-transform: uppercase;
   color: var(--color-ink-2);
 }
 .t {
   font-family: var(--font-serif);
-  font-size: 23px;
+  font-size: 1.4375rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   margin: 6px 0 2px;
   color: var(--color-ink);
 }
 .d {
-  font-size: 9.5px;
+  font-size: 0.625rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-ink-2);
@@ -87,7 +88,7 @@
   text-align: center;
 }
 .n {
-  font-size: 30px;
+  font-size: 1.875rem;
   font-variant-numeric: tabular-nums lining-nums;
   line-height: 1;
   letter-spacing: 0.01em;
@@ -101,7 +102,7 @@
 }
 .l {
   margin-top: 6px;
-  font-size: 8px;
+  font-size: 0.59375rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--color-ink-2);
@@ -110,14 +111,14 @@
   grid-column: 1 / -1;
 }
 .wide .n {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .flags {
   margin-top: 8px;
 }
 .flagsHead {
-  font-size: 8.5px;
+  font-size: 0.625rem;
   letter-spacing: 0.26em;
   text-transform: uppercase;
   color: var(--color-oxblood);
@@ -131,7 +132,7 @@
   gap: 10px;
   padding: 9px 0;
   border-top: 1px dotted var(--rule-soft);
-  font-size: 10.5px;
+  font-size: 0.65625rem;
 }
 .nm {
   color: var(--color-ink);
@@ -139,7 +140,7 @@
 .nm small {
   display: block;
   color: var(--color-ink-2);
-  font-size: 9px;
+  font-size: 0.625rem;
   letter-spacing: 0.02em;
   margin-top: 2px;
 }
@@ -162,13 +163,13 @@
 .sig {
   font-family: var(--font-serif);
   font-style: italic;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--color-ink);
   border-bottom: 1px solid var(--color-ink-2);
   padding: 0 14px 2px;
 }
 .sigL {
-  font-size: 7.5px;
+  font-size: 0.59375rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--color-ink-3);
@@ -176,7 +177,7 @@
 }
 .code {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.625rem;
   letter-spacing: 0.2em;
   color: var(--color-ink-2);
 }

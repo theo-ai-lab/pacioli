@@ -45,6 +45,12 @@ A real pairing with a point of view — the opposite of a default `Inter` + indi
 - **Numerals, IDs, the ledger grid — IBM Plex Mono.** *Tabular figures* so the Claimed | Actual columns
   align to the digit. Mono is reserved **only** for numbers, codes, and the receipt body — never for prose
   (the Linear discipline).
+- **The fine-print floor.** Receipt fine print (column heads, spine labels, stamp captions, barcode
+  numbers) is rem-based on a two-step scale — **0.59375rem (9.5px) micro / 0.625rem (10px) fine — and
+  nothing smaller.** Real thermal receipts print smaller, but a receipt you can't read fails at the one
+  thing this product promises; the register at that scale is carried by uppercase, letterspacing, and
+  faded-ink color, not by shrinking further. Rem (not px) so a user's browser font-size preference
+  scales the whole receipt.
 
 ## 3. Layout
 
@@ -84,3 +90,38 @@ The three tells that make a UI read templated, and our structural defenses:
 *Design references that hold this bar: the Plaid banknote rebrand, Robinhood (Porto Rocha) serif+mono
 restraint, Klim's Martina Plantijn, Linear's "whisper, don't shout", and the WCAG 2.2 / inclusive
 dark-mode guidance behind the contrast choices.*
+
+## 6. One theme, examined — why there is no `prefers-color-scheme` response
+
+Pacioli ships a single dark theme. That is a decision, not an omission, and it was made with the
+counterargument on the table:
+
+**The case for honoring `prefers-color-scheme: light`.** It's the user's stated preference; WCAG's
+spirit favors user control; astigmatic readers often find light-on-dark harder in bright rooms.
+
+**Why we committed to one theme anyway.**
+
+- **The interface is already both.** The design's referent is a *lit desk holding paper*: the app
+  chrome is the dark desk, but every content surface — the receipt, the incident cards, the
+  Z-Report — is warm bone paper with dark ink. The material a user actually *reads* is
+  light-mode ink-on-paper; the desk around it is staging. A "light theme" would mean putting
+  white paper on a white desk — discarding the physical referent that section 5 names as the
+  entire defense against template UI.
+- **The verdict colors are calibrated to exactly two surfaces.** Every pair in section 1 was
+  hand-verified into the ~10–15:1 band on desk or paper. A second theme doubles the verification
+  matrix (13 tokens × 2 surfaces) for zero informational gain — no verdict, number, or citation
+  is more available in a hypothetical light chrome.
+- **It's an identity, like print.** A newspaper doesn't invert at dusk. The single theme is part
+  of the editorial-ledger voice; consistency of the object *is* the brand.
+
+**What we honor instead.** User preferences that carry information, not identity, are first-class:
+`prefers-reduced-motion` strips every decorative motion while keeping all content (section 4);
+fine print never drops below the rem-based 9.5px floor so browser font-size preferences scale the
+receipt (section 2); and `color-scheme: dark` is declared on `html` so UA-drawn chrome
+(scrollbars, select popups, autofill) sides with the desk instead of flashing white.
+
+**Reversal trigger.** If real users (not hypothetical ones) report the dark desk as a barrier —
+accessibility feedback, not taste — the paper-light variant is the designed escape hatch: the
+paper tokens already form a complete light surface, so a `[data-theme="paper"]` chrome is an
+additive job, not a redesign. Until that evidence exists, one committed theme beats two
+half-verified ones.

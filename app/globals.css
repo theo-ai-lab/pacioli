@@ -42,9 +42,13 @@
 
 /* ---------------- the desk surface ---------------- */
 /* overflow-x on html as well as body: iOS Safari ignores body-only overflow-x, and the
-   Z-Report's deliberate -0.6deg paper tilt pokes its bounding box ~1px past narrow viewports. */
+   Z-Report's deliberate -0.6deg paper tilt pokes its bounding box ~1px past narrow viewports.
+   color-scheme: the desk is dark in both OS themes — a committed stance, not a missing light
+   mode (DESIGN.md §6). Declaring it keeps UA-drawn chrome (scrollbars, select popups, autofill)
+   on the desk's side instead of flashing white. */
 html {
   overflow-x: clip;
+  color-scheme: dark;
 }
 body {
   margin: 0;

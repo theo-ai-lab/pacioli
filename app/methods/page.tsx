@@ -311,7 +311,7 @@ function Stat({ n, label, tone }: { n: string; label: string; tone?: "ok" | "bad
   return (
     <div className="bg-desk px-5 py-5 text-center">
       <div className={`font-mono text-[26px] tabular-nums ${color}`}>{n}</div>
-      <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-cream-dim">{label}</div>
+      <div className="mt-1 font-mono text-[0.625rem] uppercase tracking-[0.18em] text-cream-dim">{label}</div>
     </div>
   );
 }

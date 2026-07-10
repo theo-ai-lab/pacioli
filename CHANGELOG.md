@@ -81,6 +81,15 @@ the changes landed on `main`.
 
 ### Changed
 
+- (2026-07-10) Receipt fine print raised to a legible floor: all
+  receipt-family type (Receipt, IncidentCard, WeeklyClose, plus the ledger
+  finding chips and `/methods` stat labels) converted to rem on a two-step
+  fine-print scale — 0.59375rem (9.5px) micro / 0.625rem (10px) fine, nothing
+  smaller (previously down to 7px) — so browser font-size preferences scale
+  the receipts. `color-scheme: dark` declared on `html` so UA chrome sides
+  with the desk. DESIGN.md records the floor (§2) and examines and commits
+  the single-dark-theme stance against `prefers-color-scheme`, with a
+  reversal trigger (§6).
 - (2026-07-10) README restructured for scan: the top third names the single
   intended user (the agent developer receipting every agent PR and purchase in
   CI) and adds a three-step "Add it to your agent stack in 5 minutes" wedge —
