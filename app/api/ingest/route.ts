@@ -73,7 +73,7 @@ export async function POST(req: Request): Promise<Response> {
     // never fails the response). Every field comes from the TYPED success body; the raw confirmation
     // body is NOT among them (PRIVACY INVARIANT — only extracted fields persist).
     try {
-      (await getStore()).save({
+      await (await getStore()).save({
         receiptId: res.body.receiptId,
         receiptHash: res.body.receiptHash,
         balanced: res.body.balanced,

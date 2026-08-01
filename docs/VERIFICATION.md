@@ -86,8 +86,49 @@ seat fee + add-on") — closer to a black-box recorder than a tripwire
 Each receipt is content-addressed (SHA-256 over its claim, evidence, and verdict) and batched into
 a **Merkle audit trail**: one root commits to a session, and an inclusion proof shows a receipt
 belongs to it *without revealing the others* — selective transparency, no SNARK
-([`packages/engine/src/merkle.ts`](../packages/engine/src/merkle.ts)). Signed, hash-chained agent
-receipts are themselves prior art
+([`packages/engine/src/merkle.ts`](../packages/engine/src/merkle.ts)).
+
+**What that does and does not cover.** A content hash proves a receipt's contents match its id. On
+its own it proves nothing about the *ledger* those receipts sit in — a row edited, deleted or
+reordered straight against the database file would still hash correctly, because nothing committed
+to its position. So the durable store is a chain, not just a table
+([`lib/store/ledger-chain.ts`](../lib/store/ledger-chain.ts)): each persisted row carries a
+`leafHash` over its immutable facts, the `prevHash` of the row before it, and
+`entryHash = chainHash(prevHash, leafHash)`; each scope — the whole store, plus every session ledger
+— commits a count, a head, and a Merkle root over its leaves.
+
+| a change made directly to the sqlite file | caught by |
+|---|---|
+| a historical row edited in place | its `leafHash` no longer matches its contents |
+| a row deleted, or two rows reordered | the next row's `prevHash` no longer links |
+| the newest rows truncated | the scope's committed count and head |
+| a row inserted without extending the chain | both of the above |
+| a session's whole ledger forged in | it has receipts but no committed chain state |
+
+Covered honestly means covered *exactly*: the leaf commits to `receiptId`, `receiptHash`,
+`balanced`, `findingTypes`, `agent`, `merchant`, `deltaUsd`, `createdAt` and `sessionKey`. It
+deliberately does **not** cover `seenCount`, the mutable replay counter that a re-submission bumps in
+place — the chain commits to the immutable facts of each distinct receipt, not to how many times one
+was replayed. Three further limits, stated rather than buried: receipts written *before* the chain
+existed carry no commitment and the verifier refuses to certify them instead of passing them
+silently; bounded retention legitimately prunes the oldest rows, so a prune is **recorded** (the
+chain keeps the last pruned entry as its anchor and the affected scopes re-seal) rather than left
+looking like an attack; and the chain proves *internal consistency*, not authorship — an attacker
+who can rewrite the whole file, chain and all, produces a self-consistent ledger. Detecting that
+needs an external anchor (an off-box copy of the root, or the optional ML-DSA-65 signature over it),
+which is why the roots are exposed rather than kept internal.
+
+```bash
+npm run verify:ledger -- receipts.db      # exit 0 verified · exit 1 with the located fault
+```
+
+The verifier opens the database **read-only**, walks every link from genesis to head, and names the
+scope, sequence number and receipt id of the first fault
+([`lib/store/verify-ledger.ts`](../lib/store/verify-ledger.ts)). CI runs it on every push against a
+committed reference store (`dataset/reference-ledger.db`), so this is a continuously re-proven gate
+and not a one-time assertion.
+
+Signed, hash-chained agent receipts are themselves prior art
 ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
 in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the
 receipt format. See [`RELATED_WORK.md`](RELATED_WORK.md).
@@ -157,8 +198,8 @@ scoped — a specificity check, not a τ²-bench score; see [`bench/tau2/`](../b
 
 ### CI re-proves it
 
-A GitHub Actions workflow runs typecheck + lint + tests + fuzz + eval + build (and the Inspect
-harness) on every push — the eval is a regression gate, not a one-time claim. The eval snapshot
+A GitHub Actions workflow runs typecheck + lint + tests + ledger audit + fuzz + eval + build (and
+the Inspect harness) on every push — the eval is a regression gate, not a one-time claim. The eval snapshot
 ([`eval/RESULTS.md`](../eval/RESULTS.md)) must reproduce byte-for-byte
 (`npm run eval:snapshot && git diff --exit-code eval/RESULTS.md`), and a separate job packs
 `@pacioli-app/engine`, installs the tarball into a fresh consumer directory, and holds the CLI to

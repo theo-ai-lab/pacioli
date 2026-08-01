@@ -96,6 +96,7 @@ surface here; each surface's full contract — auth, error codes, judge semantic
 | **PR gate** | an agent's pull request — flagged (`OVERSPEND` on an oversized diff) before CI even finishes | `npm run reconcile:pr -- --gate < pr.json` |
 | **CI corpus audit** | a JSONL corpus of claims → SARIF (GitHub code scanning) or JUnit; malformed rows fail the gate, never skip | `npm run audit -- --gate corpus.jsonl` |
 | **Prometheus metrics** | the receipt store itself: totals, flagged counts, findings by type, store backend | `GET /api/metrics` |
+| **Ledger audit** | the durable store itself: walks its hash chain + per-scope Merkle roots and exits non-zero on the first altered, deleted, reordered or forged row | `npm run verify:ledger -- receipts.db` |
 | **Deploy parity** | the deployment: the exact sha it serves, re-checked against `main` in CI on every push and weekly | `GET /api/version` |
 | **Framework adapter** | a LangChain/Agent-SDK run, receipted mid-loop with zero framework imports | [`lib/integrations/langchain.ts`](lib/integrations/langchain.ts) |
 
@@ -195,6 +196,7 @@ account of each mechanism is in
 | The rules survive fuzzing | seeded property-based + metamorphic fuzzer at the rule boundaries — **100,000 cases, zero violations** | `npm run fuzz -- 100000` | [`fuzz.ts`](lib/engine/fuzz.ts) |
 | Findings diagnose, not just detect | ranked deterministic root-cause hypotheses on every finding (the receipt's `likely` line) | `npm test` | [`hypotheses.ts`](packages/engine/src/hypotheses.ts) |
 | Receipts are tamper-evident | SHA-256 content addressing + Merkle inclusion proofs — selective transparency, no SNARK | `npm test` | [`merkle.ts`](packages/engine/src/merkle.ts) · [`RELATED_WORK.md`](docs/RELATED_WORK.md) |
+| The stored ledger is tamper-evident | every persisted row is hash-chained to the one before it, every scope commits a count, head and Merkle root — an edit, delete, reorder or truncation made straight against the sqlite file is located by sequence and receipt id | `npm run verify:ledger -- dataset/reference-ledger.db` | [`ledger-chain.ts`](lib/store/ledger-chain.ts) · [`verify-ledger.ts`](lib/store/verify-ledger.ts) |
 | The fast path is falsifiable | deterministic tier ≡ judge-on-everything, measured over 48 labeled fixtures: ~40% resolved with zero escalation, 0 lossless violations, zero model spend | `npm run reconcile -- --equivalence` | [`cascade.ts`](lib/engine/cascade.ts) |
 | Distilled rules must survive a holdout | jury consensus proposes rules; out-of-sample gold labels promote or reject them (1 promoted, 1 rejected; deterministic coverage 39.6% → 54.2%) | `npm run distill` | [`jury.ts`](lib/engine/jury.ts) · [`distill.ts`](lib/engine/distill.ts) |
 | The judge's risk is bounded honestly | Clopper–Pearson upper bound on selective risk; the certificate's width is shown vs N — never a small-N headline | `npm run certify` | [`selective-risk.ts`](lib/engine/selective-risk.ts) |

@@ -20,12 +20,12 @@ const dir = mkdtempSync(join(tmpdir(), "pacioli-session-store-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("receipt store — per-user/session ledger (additive)", () => {
-  it("memory: scopes list + stats to a session key without disturbing the global view", () => {
+  it("memory: scopes list + stats to a session key without disturbing the global view", async () => {
     const s = createMemoryStore();
-    s.save(mk("a1", false, ["OVERSPEND"], "user-alice", 1));
-    s.save(mk("a2", true, [], "user-alice", 2));
-    s.save(mk("b1", false, ["SCOPE_CREEP"], "user-bob", 3));
-    s.save(mk("g1", true, [])); // no session → global only
+    await s.save(mk("a1", false, ["OVERSPEND"], "user-alice", 1));
+    await s.save(mk("a2", true, [], "user-alice", 2));
+    await s.save(mk("b1", false, ["SCOPE_CREEP"], "user-bob", 3));
+    await s.save(mk("g1", true, [])); // no session → global only
 
     expect(s.listBySession("user-alice").map((r) => r.receiptId)).toEqual(["a2", "a1"]); // newest first
     expect(s.statsBySession("user-alice")).toMatchObject({ total: 2, events: 2, flagged: 1 });
@@ -39,10 +39,10 @@ describe("receipt store — per-user/session ledger (additive)", () => {
     expect(s.statsBySession("nobody")).toMatchObject({ total: 0, events: 0, flagged: 0 });
   });
 
-  it("memory: a replay under the same content keeps its first session and counts as an event", () => {
+  it("memory: a replay under the same content keeps its first session and counts as an event", async () => {
     const s = createMemoryStore();
-    s.save(mk("r1", false, ["OVERSPEND"], "user-alice", 1));
-    s.save(mk("r1", false, ["OVERSPEND"], "user-alice", 9)); // replay
+    await s.save(mk("r1", false, ["OVERSPEND"], "user-alice", 1));
+    await s.save(mk("r1", false, ["OVERSPEND"], "user-alice", 9)); // replay
     expect(s.statsBySession("user-alice")).toMatchObject({ total: 1, events: 2 });
   });
 
@@ -50,10 +50,10 @@ describe("receipt store — per-user/session ledger (additive)", () => {
     const s = await tryCreateSqliteStore(join(dir, "session.db"));
     if (!s) return; // node:sqlite unavailable on this runtime — skip
     expect(s.backend).toBe("sqlite");
-    s.save(mk("a1", false, ["OVERSPEND"], "user-alice", 10));
-    s.save(mk("a2", true, [], "user-alice", 20));
-    s.save(mk("b1", false, ["SCOPE_CREEP"], "user-bob", 30));
-    s.save(mk("g1", true, [])); // global-only
+    await s.save(mk("a1", false, ["OVERSPEND"], "user-alice", 10));
+    await s.save(mk("a2", true, [], "user-alice", 20));
+    await s.save(mk("b1", false, ["SCOPE_CREEP"], "user-bob", 30));
+    await s.save(mk("g1", true, [])); // global-only
 
     expect(s.listBySession("user-alice").map((r) => r.receiptId)).toEqual(["a2", "a1"]); // createdAt DESC
     expect(s.get("a1")?.sessionKey).toBe("user-alice");
@@ -94,7 +94,7 @@ describe("receipt store — per-user/session ledger (additive)", () => {
     expect(s).not.toBeNull();
     expect(s!.get("old1")?.sessionKey).toBeUndefined(); // legacy row survives, ungrouped
     expect(s!.stats().total).toBe(1);
-    s!.save(mk("new1", true, [], "user-alice", 6));
+    await s!.save(mk("new1", true, [], "user-alice", 6));
     expect(s!.listBySession("user-alice").map((r) => r.receiptId)).toEqual(["new1"]);
     expect(s!.stats().total).toBe(2);
   });

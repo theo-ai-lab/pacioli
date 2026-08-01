@@ -27,13 +27,13 @@ const get = (qs = "", headers: Record<string, string> = {}): Promise<Response> =
   GET(new Request(URL_ + qs, { headers }));
 
 const KEY_ORIG = process.env.PACIOLI_API_KEY;
-beforeEach(() => {
+beforeEach(async () => {
   delete process.env.PACIOLI_API_KEY;
   const s = createMemoryStore();
-  s.save(mk("a1", false, ["OVERSPEND"], "user-alice", 1));
-  s.save(mk("a2", true, [], "user-alice", 2));
-  s.save(mk("b1", false, ["SCOPE_CREEP"], "user-bob", 3));
-  s.save(mk("g1", true, [])); // global-only
+  await s.save(mk("a1", false, ["OVERSPEND"], "user-alice", 1));
+  await s.save(mk("a2", true, [], "user-alice", 2));
+  await s.save(mk("b1", false, ["SCOPE_CREEP"], "user-bob", 3));
+  await s.save(mk("g1", true, [])); // global-only
   h.store = s;
 });
 afterAll(() => {

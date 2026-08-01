@@ -86,7 +86,7 @@ export async function POST(req: Request): Promise<Response> {
       try {
         const store = await getStore();
         for (const c of res.body.claims) {
-          store.save({
+          await store.save({
             receiptId: c.receiptId,
             receiptHash: c.receiptHash,
             balanced: c.balanced,
@@ -111,7 +111,7 @@ export async function POST(req: Request): Promise<Response> {
     // Persist to the durable store (best-effort — a store error never fails the response).
     // Every field comes from the TYPED success body — no casts of raw input at the storage boundary.
     try {
-      (await getStore()).save({
+      await (await getStore()).save({
         receiptId: res.body.receiptId,
         receiptHash: res.body.receiptHash,
         balanced: res.body.balanced,
