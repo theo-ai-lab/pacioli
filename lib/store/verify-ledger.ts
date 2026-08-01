@@ -16,7 +16,10 @@ export type FaultKind =
   | "row-altered" // a row's contents no longer hash to its committed leaf
   | "chain-break" // a row's prevHash/entryHash doesn't link to the row before it
   | "missing-scope" // rows exist for a scope with no committed chain state
+  | "phantom-scope" // a scope commits to zero receipts and has none — a claim nothing can contradict
   | "uncommitted-row" // rows carrying NO chain commitment that the store never committed to
+  | "malformed-row" // a row is not the canonical encoding of the facts its leaf commits to
+  | "malformed-state" // a committed counter is not a number a check can be run against
   | "count-mismatch" // the committed count doesn't match the rows that survive
   | "head-mismatch" // the committed head isn't the last entry in the chain
   | "root-mismatch"; // the committed Merkle root doesn't match the leaves it was sealed over
@@ -66,9 +69,69 @@ interface Row extends LedgerFacts {
   leafHash: string;
   prevHash: string;
   entryHash: string;
+  /** Non-empty when the STORED row is not the canonical encoding of the facts decoded above. */
+  malformed: string[];
 }
 
 const short = (h: string): string => (h.length > 16 ? `${h.slice(0, 16)}…` : h);
+const show = (v: unknown): string => (v === null ? "NULL" : v === undefined ? "absent" : JSON.stringify(String(v)));
+
+/**
+ * Decode one stored row into the facts its leaf commits to — and record every way the STORED row is
+ * not the canonical encoding of those facts.
+ *
+ * This is the fail-closed half of the verifier, and it exists because the decode is otherwise
+ * LOSSY: `balanced === 1` maps -1, 2 and "0" all to false; `split(",").filter(Boolean)` maps
+ * ",OVERSPEND," and "OVERSPEND" to the same array; `Number("n/a")` is NaN and `canonicalJSON(NaN)`
+ * is "null", so text in the money column hashes exactly like a committed null. Each of those means
+ * two DIFFERENT stored rows share one leaf — so "the leaf matches" would stop implying "the row is
+ * what was committed", which is the entire proposition. Making the decode injective restores it.
+ */
+function decodeRow(o: Record<string, unknown>): Row {
+  const malformed: string[] = [];
+
+  if (o.balanced !== 0 && o.balanced !== 1) {
+    malformed.push(`balanced is ${show(o.balanced)}, which is not a verdict (every reader coerces it differently)`);
+  }
+  const rawTypes = o.findingTypes === null || o.findingTypes === undefined ? "" : String(o.findingTypes);
+  const findingTypes = rawTypes ? rawTypes.split(",").filter(Boolean) : [];
+  if (findingTypes.join(",") !== rawTypes) {
+    malformed.push(`findingTypes ${JSON.stringify(rawTypes)} is not the canonical encoding of ${JSON.stringify(findingTypes)}`);
+  }
+  const deltaUsd = o.deltaUsd === null || o.deltaUsd === undefined ? null : Number(o.deltaUsd);
+  if (deltaUsd !== null && !Number.isFinite(deltaUsd)) {
+    malformed.push(`deltaUsd is ${show(o.deltaUsd)}, which is not a number — it would hash as the committed null`);
+  }
+  const createdAt = Number(o.createdAt);
+  if (!Number.isFinite(createdAt)) malformed.push(`createdAt is ${show(o.createdAt)}, which is not a timestamp`);
+  const seq = Number(o.seq);
+  if (o.seq === null || o.seq === undefined || !Number.isInteger(seq)) {
+    malformed.push(`seq is ${show(o.seq)}, which is not a position in the chain`);
+  }
+
+  return {
+    receiptId: String(o.receiptId),
+    receiptHash: String(o.receiptHash),
+    balanced: o.balanced === 1,
+    findingTypes,
+    agent: String(o.agent),
+    merchant: String(o.merchant),
+    deltaUsd,
+    createdAt,
+    sessionKey: o.sessionKey === null || o.sessionKey === undefined ? undefined : String(o.sessionKey),
+    seq,
+    leafHash: String(o.leafHash),
+    prevHash: String(o.prevHash),
+    entryHash: String(o.entryHash),
+    malformed,
+  };
+}
+
+/** A committed counter, or null when it is not a number a check could be run against. */
+const counter = (v: unknown): number | null => {
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+};
 
 /** Verify a persisted receipt store. Never mutates it. */
 export async function verifyLedger(path: string): Promise<LedgerReport> {
@@ -108,39 +171,60 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
            WHERE leafHash IS NOT NULL ORDER BY seq ASC`,
         )
         .all() as Record<string, unknown>[]
-    ).map(
-      (o): Row => ({
-        receiptId: String(o.receiptId),
-        receiptHash: String(o.receiptHash),
-        balanced: o.balanced === 1,
-        findingTypes: o.findingTypes ? String(o.findingTypes).split(",").filter(Boolean) : [],
-        agent: String(o.agent),
-        merchant: String(o.merchant),
-        deltaUsd: o.deltaUsd === null || o.deltaUsd === undefined ? null : Number(o.deltaUsd),
-        createdAt: Number(o.createdAt),
-        sessionKey: o.sessionKey === null || o.sessionKey === undefined ? undefined : String(o.sessionKey),
-        seq: Number(o.seq),
-        leafHash: String(o.leafHash),
-        prevHash: String(o.prevHash),
-        entryHash: String(o.entryHash),
-      }),
-    );
+    ).map(decodeRow);
 
+    // THE COMMITTED COUNTERS, VALIDATED BEFORE ANYTHING IS INFERRED FROM THEM. Every one of these
+    // GATES a check — `rootCount` decides how many leaves the root is compared over — and a gate that
+    // cannot be parsed must FAIL, never be skipped: `NaN > n` is false (reads as "in range") and
+    // `leaves.slice(0, -9)` silently yields [] (reads as "the empty root, which matches"). Two columns
+    // of UPDATE would otherwise retire a scope's inclusion commitment while the CLI printed VERIFIED.
     const state = new Map<
       string,
       { head: string; count: number; root: string; rootCount: number; prunedHash: string; unchained: number }
     >();
+    const malformedState: LedgerFault[] = [];
     for (const s of db
       .prepare(`SELECT scope, head, count, root, rootCount, prunedHash, unchained FROM chain_state`)
       .all() as Record<string, unknown>[]) {
-      state.set(String(s.scope), {
+      const scope = String(s.scope);
+      const where = scope === WHOLE_STORE ? "the store" : `session ${JSON.stringify(scope)}`;
+      const [count, rootCount, unchained] = [counter(s.count), counter(s.rootCount), counter(s.unchained ?? 0)];
+      for (const [field, raw, parsed] of [
+        ["count", s.count, count],
+        ["rootCount", s.rootCount, rootCount],
+        ["unchained", s.unchained, unchained],
+      ] as const) {
+        if (parsed === null) {
+          malformedState.push({
+            kind: "malformed-state",
+            scope,
+            actual: show(raw),
+            detail:
+              `${where}: committed ${field} is ${show(raw)}, not a count — every check this gates would be ` +
+              `SKIPPED rather than failed, so the commitment is treated as unverifiable.`,
+          });
+        }
+      }
+      if (count !== null && rootCount !== null && rootCount > count) {
+        malformedState.push({
+          kind: "malformed-state",
+          scope,
+          expected: `rootCount <= ${count}`,
+          actual: String(rootCount),
+          detail: `${where}: the Merkle root claims to be sealed over ${rootCount} leaves but the scope commits to only ${count}.`,
+        });
+      }
+      state.set(scope, {
         head: String(s.head),
-        count: Number(s.count),
+        count: count ?? Number.NaN,
         root: String(s.root),
-        rootCount: Number(s.rootCount),
+        rootCount: rootCount ?? Number.NaN,
         prunedHash: String(s.prunedHash ?? ""),
-        unchained: Number(s.unchained ?? 0),
+        unchained: unchained ?? Number.NaN,
       });
+    }
+    if (malformedState.length > 0) {
+      return { ok: false, path, receipts: rows.length, scopes: [], faults: malformedState };
     }
 
     const faults: LedgerFault[] = [];
@@ -196,7 +280,38 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
     const beforeWalk = faults.length;
     const leavesByScope = new Map<string, string[]>([[WHOLE_STORE, []]]);
     let prev = whole.prunedHash || GENESIS;
+    let lastSeq = 0;
     for (const r of rows) {
+      if (r.malformed.length > 0) {
+        faults.push({
+          kind: "malformed-row",
+          scope: WHOLE_STORE,
+          seq: r.seq,
+          receiptId: r.receiptId,
+          detail: `seq ${r.seq} (${r.receiptId}): ${r.malformed.join("; ")} — a row that is not the canonical encoding of its facts cannot be certified by its leaf.`,
+        });
+        break;
+      }
+      // THE WALK'S ORDER IS `seq`, so `seq` has to be an order. Two rows sharing a position are
+      // separated by whatever tie-break the engine feels like today (rowid, until a VACUUM), which
+      // means the chain would be validated against an order nobody committed to — and `seq` is also
+      // what bounded retention deletes by, so a collision lets an attacker choose which row the next
+      // legitimate prune destroys, and the prune records itself as legitimate.
+      if (!(r.seq > lastSeq)) {
+        faults.push({
+          kind: "malformed-row",
+          scope: WHOLE_STORE,
+          seq: r.seq,
+          receiptId: r.receiptId,
+          expected: `a position greater than ${lastSeq}`,
+          actual: String(r.seq),
+          detail:
+            `seq ${r.seq} (${r.receiptId}): does not follow the row before it (position ${lastSeq}) — the chain's ` +
+            `order would depend on a tie-break, not on what was committed.`,
+        });
+        break;
+      }
+      lastSeq = r.seq;
       const expectedLeaf = await leafHash(r);
       if (expectedLeaf !== r.leafHash) {
         faults.push({
@@ -256,6 +371,21 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
                 ? `${where}: committed to ${st.count} receipts, ${leaves.length} survive — ${missing} were REMOVED.`
                 : `${where}: committed to ${st.count} receipts but ${leaves.length} are present — ${-missing} were ` +
                   `INSERTED without the scope re-committing to them.`,
+          });
+          continue;
+        }
+        // A SCOPE THAT COMMITS TO NOTHING. Every check above is relative to the scope's own claim, and
+        // a claim of "no receipts" is trivially satisfiable — count 0, head genesis, the empty root.
+        // The store never produces one for a session (a prune deletes a session's chain state when its
+        // last row goes), so a zero-receipt session ledger can only have been forged in. The whole
+        // store is exempt: an empty store is a real, legitimate state.
+        if (scope !== WHOLE_STORE && leaves.length === 0) {
+          faults.push({
+            kind: "phantom-scope",
+            scope,
+            detail:
+              `${where}: commits to zero receipts and has none — a claim nothing can contradict. The store deletes a ` +
+              `session's chain state when its last row is pruned, so this ledger was FORGED IN.`,
           });
           continue;
         }

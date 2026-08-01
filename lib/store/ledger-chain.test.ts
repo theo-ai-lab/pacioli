@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tryCreateSqliteStore, type StoredReceipt } from "./receipt-store";
 import { verifyLedger } from "./verify-ledger";
-import { leafHash, entryHashFor } from "./ledger-chain";
+import { leafHash, entryHashFor, scopeRoot } from "./ledger-chain";
 
 const mk = (id: string, balanced: boolean, types: string[], sessionKey?: string, createdAt = 1): StoredReceipt => ({
   receiptId: id,
@@ -317,5 +317,138 @@ describe("persisted ledger — hash chain + per-session Merkle root", () => {
     const after = await verifyLedger(path);
     expect(after.ok).toBe(false);
     expect(after.faults.map((f) => f.kind)).toContain("root-mismatch");
+  });
+});
+
+/**
+ * FAIL CLOSED ON MALFORMED INPUT. The NULL-chain evasion was an instance of a class — "a verification
+ * function that SUCCEEDS on malformed input" — not a one-off. These are its siblings, every one of
+ * them found by the tamper drill (lib/store/tamper-drill.ts) rather than by imagination: a check that
+ * gets SKIPPED because a value could not be parsed is worse than no check at all, and a decode that
+ * maps two different stored rows onto the same committed facts means "the leaf matches" stops meaning
+ * "the row is what was committed".
+ */
+describe("verifier — fails closed on malformed input", () => {
+  it("refuses a DUPLICATE sequence number: the walk's order must not depend on a tie-break", async () => {
+    // ORDER BY seq with a tie is resolved by rowid *today*, so every link still holds and the ledger
+    // verifies — while `seq` is also what bounded retention deletes by. An attacker who can make two
+    // rows share a position can steer which row the next legitimate prune destroys, and the prune is
+    // recorded as legitimate. seq is the chain's order authority; it has to be checked like one.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET seq = 2 WHERE receiptId = 'sha256:ccc'`); // ccc was seq 3, bbb is seq 2
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-row");
+    expect(report.faults[0].receiptId).toBe("sha256:ccc");
+    expect(report.faults[0].detail).toMatch(/position/i);
+  });
+
+  it("refuses a NULL sequence number rather than sorting it wherever sqlite likes", async () => {
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET seq = NULL WHERE receiptId = 'sha256:ccc'`);
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-row");
+  });
+
+  it("refuses a NEGATIVE rootCount instead of silently checking the root over an empty set", async () => {
+    // `st.rootCount > leaves.length` is the only guard, and a negative number sails past it — then
+    // `leaves.slice(0, -9)` yields [] and the Merkle check compares the empty root to the empty root.
+    // Two columns of UPDATE and the scope's inclusion commitment means nothing, while the CLI prints
+    // VERIFIED over it.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.prepare(`UPDATE chain_state SET rootCount = -9, root = ? WHERE scope = ''`).run(await scopeRoot([]));
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-state");
+    expect(report.faults[0].detail).toMatch(/rootCount/);
+  });
+
+  it("refuses a NON-NUMERIC rootCount — a comparison against NaN is false, which reads as 'in range'", async () => {
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.prepare(`UPDATE chain_state SET rootCount = 'x', root = ? WHERE scope = 'user-alice'`).run(await scopeRoot([]));
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-state");
+    expect(report.faults[0].scope).toBe("user-alice");
+  });
+
+  it("refuses a session ledger committed to ZERO receipts — a claim nothing can contradict", async () => {
+    // Every scope check is relative to that scope's own claim, and a claim of "no receipts" is
+    // trivially satisfiable: count 0, head GENESIS, the empty root. The store never produces one (a
+    // prune deletes a session's chain state when its last row goes), so it can only have been forged.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.prepare(
+      `INSERT INTO chain_state (scope, head, count, root, rootCount, prunedSeq, prunedHash, unchained, updatedAt)
+       VALUES ('user-ghost','pacioli-ledger-genesis',0,?,0,0,'',0,1)`,
+    ).run(await scopeRoot([]));
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("phantom-scope");
+    expect(report.faults[0].scope).toBe("user-ghost");
+  });
+
+  it("refuses TEXT in the money column: a coerced NaN must not hash as the committed null", async () => {
+    // Number("n/a") is NaN and canonicalJSON(NaN) is "null", so text in deltaUsd hashes EXACTLY like
+    // the null that was committed. The leaf matches, the verifier passes, and a reader renders NaN.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET deltaUsd = 'n/a' WHERE receiptId = 'sha256:bbb'`); // bbb committed NULL
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-row");
+    expect(report.faults[0].receiptId).toBe("sha256:bbb");
+    expect(report.faults[0].detail).toMatch(/deltaUsd/);
+  });
+
+  it("refuses a findingTypes encoding that is not the canonical join of what it decodes to", async () => {
+    // split(",").filter(Boolean) drops empty members, so ",OVERSPEND," and "OVERSPEND" decode to the
+    // same array and share a leaf. The decode has to be INJECTIVE or the leaf stops pinning the row.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET findingTypes = ',OVERSPEND,,' WHERE receiptId = 'sha256:aaa'`);
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-row");
+    expect(report.faults[0].detail).toMatch(/findingTypes/);
+  });
+
+  it("refuses a verdict that is neither 0 nor 1 — every reader coerces it differently", async () => {
+    // `o.balanced === 1` maps -1, 2 and "0" all to false. The verifier and the store agree today by
+    // accident; a stored verdict outside {0,1} is not a verdict and must not verify.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET balanced = -1 WHERE receiptId = 'sha256:aaa'`); // aaa committed 0
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-row");
+    expect(report.faults[0].detail).toMatch(/balanced/);
+  });
+
+  it("still passes the untampered ledger — fail-closed must not mean fail-always", async () => {
+    const report = await verifyLedger(freshCopy());
+    expect(report.faults).toEqual([]);
+    expect(report.ok).toBe(true);
   });
 });
