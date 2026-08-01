@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tryCreateSqliteStore, type StoredReceipt } from "./receipt-store";
 import { verifyLedger } from "./verify-ledger";
+import { leafHash, entryHashFor } from "./ledger-chain";
 
 const mk = (id: string, balanced: boolean, types: string[], sessionKey?: string, createdAt = 1): StoredReceipt => ({
   receiptId: id,
@@ -127,6 +128,90 @@ describe("persisted ledger — hash chain + per-session Merkle root", () => {
     const report = await verifyLedger(path);
     expect(report.ok).toBe(false);
     expect(report.faults[0].receiptId).toBe("sha256:evil");
+  });
+
+  it("detects a forged INSERT that leaves the chain columns NULL — the CHEAPEST forgery", async () => {
+    // The EASY variant of the test above. Forging bogus chain values ('x','y','z') is the hard way;
+    // simply omitting them is one plain INSERT, and the row is still served by /api/ledger. A verifier
+    // that only walks rows carrying a leafHash — and takes the uncommitted count from chain_state
+    // instead of recounting the rows — prints VERIFIED straight over it.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(
+      `INSERT INTO receipts (receiptId,receiptHash,balanced,findingTypes,agent,merchant,deltaUsd,createdAt,seenCount,sessionKey)
+       VALUES ('sha256:forged0000000000','hforged',1,'','attacker','Acme',NULL,9999999,1,NULL)`,
+    );
+    db.close(); // chain_state deliberately NOT touched — the attacker never has to go near it
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("uncommitted-row");
+    expect(report.faults[0].detail).toMatch(/INSERTED/);
+    expect(report.faults[0].expected).toBe("0");
+    expect(report.faults[0].actual).toBe("1");
+  });
+
+  it("calls an INSERT an insert — never a negative removal — when the scope never committed to it", async () => {
+    // The third insertion shape: chain the row correctly off the current head, then leave chain_state
+    // alone. The committed count catches it either way, but a diagnosis of "−1 were REMOVED" sends the
+    // operator looking for a deletion that never happened.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    const head = String((db.prepare(`SELECT head FROM chain_state WHERE scope = ''`).all() as Array<{ head: string }>)[0].head);
+    const facts = {
+      receiptId: "sha256:eee",
+      receiptHash: "hsha256:eee",
+      balanced: true,
+      findingTypes: [] as string[],
+      agent: "attacker",
+      merchant: "Acme",
+      deltaUsd: null,
+      createdAt: 9000,
+    };
+    const leaf = await leafHash(facts);
+    db.prepare(
+      `INSERT INTO receipts (receiptId,receiptHash,balanced,findingTypes,agent,merchant,deltaUsd,createdAt,seenCount,sessionKey,seq,leafHash,prevHash,entryHash)
+       VALUES (?,?,1,'',?,?,NULL,?,1,NULL,99,?,?,?)`,
+    ).run(facts.receiptId, facts.receiptHash, facts.agent, facts.merchant, facts.createdAt, leaf, head, await entryHashFor(head, leaf));
+    db.close();
+
+    const report = await verifyLedger(path);
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("count-mismatch");
+    expect(report.faults[0].detail).toMatch(/INSERTED/);
+    expect(report.faults[0].detail).not.toMatch(/REMOVED/);
+  });
+
+  it("RECOUNTS the uncommitted rows instead of trusting the committed counter", async () => {
+    // Same defect from the other side: chain_state.unchained is a stored number, so it can be stale or
+    // a lie in either direction. Deleting a pre-chain row behind the counter's back must be named, not
+    // papered over by re-printing the counter.
+    const path = join(dir, "uncommitted-recount.db");
+    const legacy = await rawOpen(path);
+    legacy.exec(
+      `CREATE TABLE receipts (receiptId TEXT PRIMARY KEY, receiptHash TEXT, balanced INTEGER,
+       findingTypes TEXT, agent TEXT, merchant TEXT, deltaUsd REAL, createdAt INTEGER, seenCount INTEGER NOT NULL DEFAULT 1)`,
+    );
+    for (const id of ["old1", "old2"]) {
+      legacy.prepare(`INSERT INTO receipts VALUES (?,?,?,?,?,?,?,?,1)`).run(id, "h" + id, 0, "OVERSPEND", "a", "m", null, 5);
+    }
+    legacy.close();
+
+    const s = await tryCreateSqliteStore(path);
+    expect(s).not.toBeNull();
+    await s!.save(mk("sha256:new1", true, [], undefined, 6));
+    expect((await verifyLedger(path)).faults[0].detail).toMatch(/2 receipt\(s\) predate/);
+
+    const db = await rawOpen(path);
+    db.exec(`DELETE FROM receipts WHERE receiptId = 'old2'`); // chain_state.unchained still claims 2
+    db.close();
+
+    const after = await verifyLedger(path);
+    expect(after.ok).toBe(false);
+    expect(after.faults[0].kind).toBe("uncommitted-row");
+    expect(after.faults[0].detail).toMatch(/GONE/);
+    // …and the certifiability line now reports what is actually there, not the stale counter.
+    expect(after.faults.some((f) => f.kind === "no-chain" && /1 receipt\(s\) predate/.test(f.detail))).toBe(true);
   });
 
   it("refuses to pass a legacy store that has no chain at all (no silent green)", async () => {

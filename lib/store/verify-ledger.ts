@@ -16,6 +16,7 @@ export type FaultKind =
   | "row-altered" // a row's contents no longer hash to its committed leaf
   | "chain-break" // a row's prevHash/entryHash doesn't link to the row before it
   | "missing-scope" // rows exist for a scope with no committed chain state
+  | "uncommitted-row" // rows carrying NO chain commitment that the store never committed to
   | "count-mismatch" // the committed count doesn't match the rows that survive
   | "head-mismatch" // the committed head isn't the last entry in the chain
   | "root-mismatch"; // the committed Merkle root doesn't match the leaves it was sealed over
@@ -150,15 +151,42 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
         detail: `${path} has ${rows.length} receipts but no committed chain state for the store itself`,
       });
     }
+    // ROWS THAT CARRY NO CHAIN COMMITMENT AT ALL. The walk below only sees rows WITH a leafHash, so a
+    // row inserted with the chain columns left NULL is outside it by construction — the cheapest
+    // possible forgery, and one that never has to touch chain_state. The committed `unchained` counter
+    // cannot be the authority on how many such rows exist (an attacker who can INSERT can also leave
+    // that counter alone), so RECOUNT them off the rows themselves and hold the counter to it.
+    const uncommitted = Number(
+      (db.prepare(`SELECT COUNT(*) AS n FROM receipts WHERE leafHash IS NULL`).all() as Array<{ n?: unknown }>)[0]?.n ?? 0,
+    );
+    if (uncommitted !== whole.unchained) {
+      const delta = Math.abs(uncommitted - whole.unchained);
+      faults.push({
+        kind: "uncommitted-row",
+        scope: WHOLE_STORE,
+        expected: String(whole.unchained),
+        actual: String(uncommitted),
+        detail:
+          uncommitted > whole.unchained
+            ? `${delta} row(s) carry no chain commitment beyond the ${whole.unchained} this store committed to — ` +
+              `they were INSERTED with the chain columns left empty. An uncommitted row is not in the chain, so the ` +
+              `chain walk cannot see it, but it is still served as a receipt: treat it as FORGED.`
+            : `${delta} of the ${whole.unchained} uncommitted (pre-chain) row(s) this store committed to are GONE — ` +
+              `they were deleted outside the store API, which does not decrement the counter behind its own back.`,
+      });
+    }
     // Receipts written before the chain existed. They are real records but they were never committed
     // to, so they cannot be certified — and a verifier that quietly passed them would be worse than no
-    // verifier at all. Reported, then the chained portion is still walked.
-    if (whole.unchained > 0) {
+    // verifier at all. Reported over the RECOUNTED number that is genuinely pre-chain (anything above
+    // it is the forgery named above, and calling a forgery "pre-chain" would be its own small lie),
+    // then the chained portion is still walked.
+    const predateChain = Math.min(uncommitted, whole.unchained);
+    if (predateChain > 0) {
       faults.push({
         kind: "no-chain",
         scope: WHOLE_STORE,
         detail:
-          `${whole.unchained} receipt(s) predate the hash chain and carry no commitment — they are NOT ` +
+          `${predateChain} receipt(s) predate the hash chain and carry no commitment — they are NOT ` +
           `tamper-evident and cannot be verified retroactively. Only the ${rows.length} chained receipts below are.`,
       });
     }
@@ -217,12 +245,17 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
         scopes.push({ scope, receipts: leaves.length, head: st.head, root: st.root, rootCount: st.rootCount });
         const where = scope === WHOLE_STORE ? "the store" : `session ${JSON.stringify(scope)}`;
         if (st.count !== leaves.length) {
+          const missing = st.count - leaves.length;
           faults.push({
             kind: "count-mismatch",
             scope,
             expected: String(st.count),
             actual: String(leaves.length),
-            detail: `${where}: committed to ${st.count} receipts, ${leaves.length} survive — ${st.count - leaves.length} were REMOVED.`,
+            detail:
+              missing > 0
+                ? `${where}: committed to ${st.count} receipts, ${leaves.length} survive — ${missing} were REMOVED.`
+                : `${where}: committed to ${st.count} receipts but ${leaves.length} are present — ${-missing} were ` +
+                  `INSERTED without the scope re-committing to them.`,
           });
           continue;
         }

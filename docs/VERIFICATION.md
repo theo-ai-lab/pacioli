@@ -102,7 +102,8 @@ to its position. So the durable store is a chain, not just a table
 | a historical row edited in place | its `leafHash` no longer matches its contents |
 | a row deleted, or two rows reordered | the next row's `prevHash` no longer links |
 | the newest rows truncated | the scope's committed count and head |
-| a row inserted without extending the chain | both of the above |
+| a row inserted with forged chain values | both of the above |
+| a row inserted with the chain columns left empty | the rows carrying no commitment are RECOUNTED, never taken from the stored counter |
 | a session's whole ledger forged in | it has receipts but no committed chain state |
 
 Covered honestly means covered *exactly*: the leaf commits to `receiptId`, `receiptHash`,
