@@ -42,6 +42,31 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run smoke:install
 
+  parity-probe:
+    # The deploy-parity workflow's DATA check, proven here against a locally started instance on every
+    # push. Same script, same fixture; only BASE differs. That keeps "the deployment reconciles
+    # correctly" a check this repo can prove it owns, instead of one that only ever runs against a URL
+    # nobody can re-run — and it means a change that breaks the verdict reddens CI, not just parity.
+    name: a local instance returns the right verdict (deploy-parity's data check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start the app and probe it
+        run: |
+          PACIOLI_DB="$RUNNER_TEMP/parity-receipts.db" PORT=3111 npm start &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null "http://127.0.0.1:3111/api/version" && break
+            sleep 1
+          done
+          BASE=http://127.0.0.1:3111 node scripts/parity-probe.mjs
+      - name: The receipt it just wrote is in a verifiable ledger
+        run: npm run verify:ledger -- "$RUNNER_TEMP/parity-receipts.db"
+
   inspect-eval:
     name: Inspect AI eval (citable harness)
     runs-on: ubuntu-latest

@@ -198,8 +198,8 @@ scoped — a specificity check, not a τ²-bench score; see [`bench/tau2/`](../b
 
 ### CI re-proves it
 
-A GitHub Actions workflow runs typecheck + lint + tests + ledger audit + fuzz + eval + build (and
-the Inspect harness) on every push — the eval is a regression gate, not a one-time claim. The eval snapshot
+A GitHub Actions workflow runs typecheck + lint + tests + ledger audit + fuzz + eval + build (plus
+the Inspect harness and the deploy-parity data probe against a locally started instance) on every push — the eval is a regression gate, not a one-time claim. The eval snapshot
 ([`eval/RESULTS.md`](../eval/RESULTS.md)) must reproduce byte-for-byte
 (`npm run eval:snapshot && git diff --exit-code eval/RESULTS.md`), and a separate job packs
 `@pacioli-app/engine`, installs the tarball into a fresh consumer directory, and holds the CLI to
@@ -248,6 +248,15 @@ has no `.git` to ask). A separate
 [deploy-parity workflow](../.github/workflows/deploy-parity.yml) curls the live demo on every
 push to `main` and weekly: a deployed sha that isn't `main`, or any route the README names going
 missing, is a red X — a stale deploy can't silently falsify the demo links.
+
+That much is still only status codes, and **a 200 proves nothing** — a deployment can serve every
+route above and reconcile wrongly. So parity is also asserted on **data**: the workflow posts a known
+fixture at `POST /api/reconcile` and holds the answer to the verdict that fixture must produce —
+flagged, `OVERSPEND`, `deltaUsd` +78.40, and the finding citing *both* the claim line and the
+evidence line ([`scripts/parity-probe.mjs`](../scripts/parity-probe.mjs)). The deployed URL is just
+`BASE`: CI runs the identical probe against a locally started instance on every push, and a unit test
+ties the fixture's expected verdict to what the engine actually produces, so the assertion can't
+drift into checking a guess.
 
 ### CI gate (SARIF / JUnit)
 

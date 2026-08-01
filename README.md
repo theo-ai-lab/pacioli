@@ -97,7 +97,7 @@ surface here; each surface's full contract — auth, error codes, judge semantic
 | **CI corpus audit** | a JSONL corpus of claims → SARIF (GitHub code scanning) or JUnit; malformed rows fail the gate, never skip | `npm run audit -- --gate corpus.jsonl` |
 | **Prometheus metrics** | the receipt store itself: totals, flagged counts, findings by type, store backend | `GET /api/metrics` |
 | **Ledger audit** | the durable store itself: walks its hash chain + per-scope Merkle roots and exits non-zero on the first altered, deleted, reordered or forged row | `npm run verify:ledger -- receipts.db` |
-| **Deploy parity** | the deployment: the exact sha it serves, re-checked against `main` in CI on every push and weekly | `GET /api/version` |
+| **Deploy parity** | the deployment: the exact sha it serves, plus a known fixture posted at the live API and held to its VERDICT (flagged `OVERSPEND`, both citations) — a 200 proves nothing | `GET /api/version` · [`parity-probe.mjs`](scripts/parity-probe.mjs) |
 | **Framework adapter** | a LangChain/Agent-SDK run, receipted mid-loop with zero framework imports | [`lib/integrations/langchain.ts`](lib/integrations/langchain.ts) |
 
 Also deterministic, also engine-side: line-item sum checks ([`lib/engine/line-items.ts`](lib/engine/line-items.ts)),
@@ -202,7 +202,7 @@ account of each mechanism is in
 | The judge's risk is bounded honestly | Clopper–Pearson upper bound on selective risk; the certificate's width is shown vs N — never a small-N headline | `npm run certify` | [`selective-risk.ts`](lib/engine/selective-risk.ts) |
 | The judge is a measured instrument | TPR/FPR, precision/recall, Cohen's κ vs human labels as Wilson intervals — **pending a key + labels** | `npm run calibrate` | [`judge-eval.ts`](lib/engine/judge-eval.ts) |
 | Externally grounded | **zero false positives** on the in-scope reference trajectories of τ²-bench's 164 real airline + retail tasks — a specificity check, not a benchmark score | `npm run bench:tau2` | [`bench/tau2/`](bench/tau2) |
-| CI re-proves all of it | typecheck · lint · tests · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness, on every push | — | [`ci.yml`](.github/workflows/ci.yml) |
+| CI re-proves all of it | typecheck · lint · tests · ledger audit · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness · a live local instance held to a fixture's verdict, on every push | — | [`ci.yml`](.github/workflows/ci.yml) |
 
 ## Limitations & known failure modes
 
