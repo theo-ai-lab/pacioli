@@ -220,9 +220,13 @@ a daily cost ceiling, and the response's `judgeMode` tells you the truth: `off`,
 `unavailable` (requested backend can't run — never disguised as "ran clean"), `error`, or the
 backend that ran. Note the split: `balanced` and `findings` are always the **deterministic**
 verdict (that is what the receipt hash commits to); judge results arrive separately as
-`judgeFindings` — if you enable a judge, gate on both. Bodies are byte-capped at the transport
-(413 past 64KB, even chunked). Errors: `400` bad JSON · `401` bad key · `413` too large ·
-`422` invalid shape · `429` judge rate-limited.
+`judgeFindings` — if you enable a judge, gate on both. A 200 also carries **`stored`**: whether the
+receipt reached the durable ledger. A failed write does not fail the reconciliation (the verdict
+stands, and the receipt is content-addressed so it can be re-submitted) but it is never hidden —
+`stored: false` means the ledger does **not** have this receipt, and on a batch it means *no claim in
+that batch* may be assumed filed. `POST /api/ingest` reports the same field. Bodies are byte-capped
+at the transport (413 past 64KB, even chunked). Errors: `400` bad JSON · `401` bad key ·
+`413` too large · `422` invalid shape · `429` judge rate-limited.
 
 ### Prometheus metrics
 

@@ -69,9 +69,12 @@ export async function POST(req: Request): Promise<Response> {
   const res = await ingestEndpoint(json);
 
   if (res.status === 200) {
-    // Persist to the durable store, scoped to this user's session ledger (best-effort — a store error
-    // never fails the response). Every field comes from the TYPED success body; the raw confirmation
-    // body is NOT among them (PRIVACY INVARIANT — only extracted fields persist).
+    // Persist to the durable store, scoped to this user's session ledger. Ingestion's promise is
+    // "forward it and it's in your books", so a failed write is REPORTED (`stored: false`) rather than
+    // swallowed — the verdict still stands and the caller can re-submit, but they are never told a
+    // receipt landed when it did not. Every field comes from the TYPED success body; the raw
+    // confirmation body is NOT among them (PRIVACY INVARIANT — only extracted fields persist).
+    let stored = false;
     try {
       await (await getStore()).save({
         receiptId: res.body.receiptId,
@@ -87,9 +90,11 @@ export async function POST(req: Request): Promise<Response> {
         // ledger. Read it back via GET /api/ledger?session=<key>.
         sessionKey: req.headers.get("x-pacioli-session")?.slice(0, 200) || undefined,
       });
-    } catch {
-      /* best-effort persistence */
+      stored = true;
+    } catch (e) {
+      console.error("[pacioli] ingested receipt persistence FAILED — responding stored:false", e);
     }
+    return Response.json({ ...res.body, stored }, { status: res.status });
   }
 
   return Response.json(res.body, { status: res.status });
