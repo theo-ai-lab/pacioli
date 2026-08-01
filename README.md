@@ -97,6 +97,7 @@ surface here; each surface's full contract — auth, error codes, judge semantic
 | **CI corpus audit** | a JSONL corpus of claims → SARIF (GitHub code scanning) or JUnit; malformed rows fail the gate, never skip | `npm run audit -- --gate corpus.jsonl` |
 | **Prometheus metrics** | the receipt store itself: totals, flagged counts, findings by type, store backend | `GET /api/metrics` |
 | **Ledger audit** | the durable store itself: walks its hash chain + per-scope Merkle roots and exits non-zero on the first altered, deleted, reordered or forged row | `npm run verify:ledger -- receipts.db` |
+| **Tamper drill** | the adversarial half of that: mutates a *copy* of a ledger 33 ways from a seeded generator and exits non-zero if the verifier passes any of them | `npm run drill:tamper -- receipts.db` |
 | **Deploy parity** | the deployment: the exact sha it serves, plus a known fixture posted at the live API and held to its VERDICT (flagged `OVERSPEND`, both citations) — a 200 proves nothing | `GET /api/version` · [`parity-probe.mjs`](scripts/parity-probe.mjs) |
 | **Framework adapter** | a LangChain/Agent-SDK run, receipted mid-loop with zero framework imports | [`lib/integrations/langchain.ts`](lib/integrations/langchain.ts) |
 
@@ -197,12 +198,13 @@ account of each mechanism is in
 | Findings diagnose, not just detect | ranked deterministic root-cause hypotheses on every finding (the receipt's `likely` line) | `npm test` | [`hypotheses.ts`](packages/engine/src/hypotheses.ts) |
 | Receipts are tamper-evident | SHA-256 content addressing + Merkle inclusion proofs — selective transparency, no SNARK | `npm test` | [`merkle.ts`](packages/engine/src/merkle.ts) · [`RELATED_WORK.md`](docs/RELATED_WORK.md) |
 | The stored ledger is tamper-evident | every persisted row is hash-chained to the one before it, every scope commits a count, head and Merkle root — an edit, delete, reorder, truncation or forged insert made straight against the sqlite file is located by sequence and receipt id | `npm run verify:ledger -- dataset/reference-ledger.db` | [`ledger-chain.ts`](lib/store/ledger-chain.ts) · [`verify-ledger.ts`](lib/store/verify-ledger.ts) |
+| …and that claim is *drilled*, not asserted | a scripted adversary with write access to the sqlite file mutates a **copy** of that same store 33 ways from a seeded generator — **264/264 caught and located, 0 escapes**, against a negative control that must still verify. The drill found and closed six evasions of the class "a verifier that succeeds on malformed input" | `npm run drill:tamper` | [`tamper-drill.ts`](lib/store/tamper-drill.ts) · [`TAMPER-DRILL.md`](docs/TAMPER-DRILL.md) |
 | The fast path is falsifiable | deterministic tier ≡ judge-on-everything, measured over 48 labeled fixtures: ~40% resolved with zero escalation, 0 lossless violations, zero model spend | `npm run reconcile -- --equivalence` | [`cascade.ts`](lib/engine/cascade.ts) |
 | Distilled rules must survive a holdout | jury consensus proposes rules; out-of-sample gold labels promote or reject them (1 promoted, 1 rejected; deterministic coverage 39.6% → 54.2%) | `npm run distill` | [`jury.ts`](lib/engine/jury.ts) · [`distill.ts`](lib/engine/distill.ts) |
 | The judge's risk is bounded honestly | Clopper–Pearson upper bound on selective risk; the certificate's width is shown vs N — never a small-N headline | `npm run certify` | [`selective-risk.ts`](lib/engine/selective-risk.ts) |
 | The judge is a measured instrument | TPR/FPR, precision/recall, Cohen's κ vs human labels as Wilson intervals — **pending a key + labels** | `npm run calibrate` | [`judge-eval.ts`](lib/engine/judge-eval.ts) |
 | Externally grounded | **zero false positives** on the in-scope reference trajectories of τ²-bench's 164 real airline + retail tasks — a specificity check, not a benchmark score | `npm run bench:tau2` | [`bench/tau2/`](bench/tau2) |
-| CI re-proves all of it | typecheck · lint · tests · ledger audit · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness · a live local instance held to a fixture's verdict, on every push | — | [`ci.yml`](.github/workflows/ci.yml) |
+| CI re-proves all of it | typecheck · lint · tests · ledger audit · tamper drill · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness · a live local instance held to a fixture's verdict, on every push | — | [`ci.yml`](.github/workflows/ci.yml) |
 
 ## Limitations & known failure modes
 

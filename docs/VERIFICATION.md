@@ -105,6 +105,10 @@ to its position. So the durable store is a chain, not just a table
 | a row inserted with forged chain values | both of the above |
 | a row inserted with the chain columns left empty | the rows carrying no commitment are RECOUNTED, never taken from the stored counter |
 | a session's whole ledger forged in | it has receipts but no committed chain state |
+| a session ledger committed to *zero* receipts | a scope can't commit to nothing: the store deletes a session's chain state when its last row goes |
+| two rows colliding on one sequence number | `seq` is the walk's order, so it must BE an order — otherwise the chain is checked against a tie-break |
+| a row stored in a non-canonical encoding (text in `deltaUsd`, padded `findingTypes`, a verdict outside `{0,1}`) | the row→facts decode is injective, so "the leaf matches" still implies "the row is what was committed" |
+| a committed counter that isn't a number (`rootCount = -9`, `rootCount = 'x'`) | counters are validated *before* anything is inferred from them — a check that can't be run FAILS, it is never skipped |
 
 Covered honestly means covered *exactly*: the leaf commits to `receiptId`, `receiptHash`,
 `balanced`, `findingTypes`, `agent`, `merchant`, `deltaUsd`, `createdAt` and `sessionKey`. It
@@ -119,6 +123,15 @@ who can rewrite the whole file, chain and all, produces a self-consistent ledger
 needs an external anchor (an off-box copy of the root, or the optional ML-DSA-65 signature over it),
 which is why the roots are exposed rather than kept internal.
 
+Retention has a sharp edge worth naming, because it follows from the second and third limits
+together: an attacker who deletes the **oldest** receipts and re-anchors the chain the way a prune
+does is indistinguishable, *from the file alone*, from bounded retention doing its job — that is what
+it means for pruning to be legitimate. What still bounds it: the pruned range must be a **prefix**
+(nothing can be lifted out of the middle without breaking a link), and any off-box copy of an older
+root contradicts it immediately. All four boundaries — `seenCount`, a full re-seal, a wiped ledger,
+and this prefix prune — are **pinned by the drill** as cases that must still verify, so if one ever
+starts failing, this paragraph gets rewritten deliberately instead of quietly going out of date.
+
 ```bash
 npm run verify:ledger -- receipts.db      # exit 0 verified · exit 1 with the located fault
 ```
@@ -128,6 +141,34 @@ scope, sequence number and receipt id of the first fault
 ([`lib/store/verify-ledger.ts`](../lib/store/verify-ledger.ts)). CI runs it on every push against a
 committed reference store (`dataset/reference-ledger.db`), so this is a continuously re-proven gate
 and not a one-time assertion.
+
+### The drill
+
+A verifier is only as good as the attacks it has actually been run against, and a list of example
+tests only ever contains the attacks its author thought of. So the claim is **drilled**: a scripted
+adversary with write access to the sqlite file mutates a *copy* of that same reference store, one
+tamper class at a time, with targets drawn from a seeded generator, and the invariant is that
+**every** one of them fails verification — held up against a **negative control** (an untampered copy
+must still verify), because a verifier that rejects everything proves nothing.
+
+```bash
+npm run drill:tamper                      # exit 0 all caught · exit 1 naming the escape
+```
+
+**33 in-model classes · 264 cases · 264 caught · 0 escapes**, re-run on every push and published as
+[`docs/TAMPER-DRILL.md`](TAMPER-DRILL.md), which CI regenerates and holds to a byte-for-byte diff.
+Adding a class to the registry in [`lib/store/tamper-drill.ts`](../lib/store/tamper-drill.ts) extends
+the invariant automatically.
+
+The drill is not decoration: on its first run it escaped in 51 of 272 cases across seven classes, all
+of them instances of one API failure mode — *a verification function that SUCCEEDS on malformed
+input*, the same class as the NULL-chain evasion that preceded it. A duplicate `seq` left every link
+holding (`ORDER BY seq` resolved the tie by rowid) while handing an attacker the choice of which row
+bounded retention deletes next; `rootCount = -9` or `'x'` retired a scope's Merkle commitment
+entirely, because `NaN > n` is false and `slice(0, -9)` quietly returns `[]`; and a lossy row decode
+let text in `deltaUsd`, padded `findingTypes` and a verdict outside `{0,1}` all hash as something
+else that was committed. Every one of those now fails closed, and the last four rows of the table
+above are the locks.
 
 Signed, hash-chained agent receipts are themselves prior art
 ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),

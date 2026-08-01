@@ -20,7 +20,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tryCreateSqliteStore, type StoredReceipt } from "./receipt-store";
-import { runTamperDrill, TAMPER_CLASSES, type DrillReport } from "./tamper-drill";
+import { runTamperDrill, renderDrillReport, TAMPER_CLASSES, type DrillReport } from "./tamper-drill";
 
 const dir = mkdtempSync(join(tmpdir(), "pacioli-drill-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -82,12 +82,20 @@ describe("ledger tamper drill", () => {
     expect(boundaries.map((c) => c.id).sort()).toEqual([
       "boundary-full-reseal-rewrite",
       "boundary-full-reseal-wipe",
+      "boundary-prefix-prune",
       "boundary-seen-count",
     ]);
     // A boundary case that starts FAILING means the verifier grew a new power (good) — but the claim
     // in docs/VERIFICATION.md then has to be re-stated deliberately, not drift.
     expect(report.pinBreaks).toEqual([]);
     for (const b of boundaries) expect(b.attempted).toBeGreaterThan(0);
+  });
+
+  it("publishes EVERY class it ran — a class missing from the report is coverage nobody can audit", () => {
+    const md = renderDrillReport(report, "dataset/reference-ledger.db");
+    for (const c of TAMPER_CLASSES) expect(md).toContain(`\`${c.id}\``);
+    expect(md).toContain("264/264"); // 33 in-model classes × 8 seeds, none inapplicable to this ledger
+    expect(md).toMatch(/Negative control.*VERIFIES/);
   });
 
   it("is reproducible — the same seeds produce the same report", async () => {

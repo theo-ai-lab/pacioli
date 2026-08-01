@@ -26,6 +26,7 @@
     "fuzz": "tsx lib/engine/fuzz-cli.ts",
     "audit": "tsx lib/report/audit-cli.ts",
     "verify:ledger": "tsx lib/store/verify-ledger-cli.ts",
+    "drill:tamper": "tsx lib/store/tamper-drill-cli.ts",
     "reconcile": "tsx lib/engine/reconcile-cli.ts",
     "distill": "tsx lib/engine/reconcile-cli.ts --distill",
     "certify": "tsx lib/engine/reconcile-cli.ts --certify",

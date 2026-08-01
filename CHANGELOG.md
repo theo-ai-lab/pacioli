@@ -13,6 +13,19 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-08-01) Ledger tamper drill (`npm run drill:tamper`): a scripted
+  adversary with write access to the sqlite file mutates a **copy** of the
+  committed reference store one class at a time — edit, delete, reorder,
+  truncate, re-insert, forge, splice across scopes, blank the chain columns,
+  rewrite a scope's count/head/root/rootCount, malformed encodings — with
+  targets drawn from a seeded generator, and the invariant is that every one of
+  them fails verification. Held against a mandatory **negative control** (an
+  untampered copy must still verify) and four **pinned boundaries** that must
+  still verify because the file alone cannot cover them (`seenCount`, a full
+  re-seal, a wiped ledger, a prefix prune). **33 in-model classes · 264 cases ·
+  264 caught · 0 escapes**; CI runs the drill and regenerates
+  [`docs/TAMPER-DRILL.md`](docs/TAMPER-DRILL.md) under a byte-for-byte diff, so
+  an escape breaks the build.
 - (2026-07-10) Capture publish path (`npm run capture:publish`): projects the
   raw private capture corpus (`dataset/captured.jsonl`, gitignored) down to the
   contract fields only, runs every free-text field through a PII redactor
@@ -120,4 +133,19 @@ the changes landed on `main`.
 
 ### Fixed
 
+- (2026-08-01) Six ledger-verifier evasions, all found by the tamper drill on
+  its first run (51 escapes in 272 cases) and all instances of one API failure
+  class — *a verification function that succeeds on malformed input*. The
+  verifier now fails closed on: a **duplicate or NULL `seq`** (the walk orders
+  by `seq`, so a tie was resolved by rowid and every link still held — while
+  `seq` is also what bounded retention deletes by, letting an attacker pick the
+  next prune's victim); a **negative or non-numeric `rootCount`**, which retired
+  a scope's Merkle commitment entirely because `NaN > n` is false and
+  `slice(0, -9)` returns `[]`; a **session scope committed to zero receipts**, a
+  claim nothing can contradict and one the store can never produce; and a
+  **non-canonical row encoding** — text in `deltaUsd` (`Number("n/a")` is NaN
+  and `canonicalJSON(NaN)` is `"null"`), padded `findingTypes`, or a verdict
+  outside `{0,1}` — which made the row→facts decode lossy, so two different
+  stored rows could share one leaf and "the leaf matches" stopped implying "the
+  row is what was committed".
 - (2026-06-12) Lockfile regenerated so `npm ci` validates across npm versions.
