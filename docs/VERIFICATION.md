@@ -160,9 +160,9 @@ npm run drill:tamper                      # exit 0 all caught · exit 1 naming t
 Adding a class to the registry in [`lib/store/tamper-drill.ts`](../lib/store/tamper-drill.ts) extends
 the invariant automatically.
 
-The drill is not decoration: on its first run it escaped in 51 of 272 cases across seven classes, all
-of them instances of one API failure mode — *a verification function that SUCCEEDS on malformed
-input*, the same class as the NULL-chain evasion that preceded it. A duplicate `seq` left every link
+The drill is not decoration: on its first run it escaped in 51 of 272 cases across seven classes,
+tracing to four root causes, all of them instances of one API failure mode — *a verification function
+that SUCCEEDS on malformed input*, the same class as the NULL-chain evasion that preceded it. A duplicate `seq` left every link
 holding (`ORDER BY seq` resolved the tie by rowid) while handing an attacker the choice of which row
 bounded retention deletes next; `rootCount = -9` or `'x'` retired a scope's Merkle commitment
 entirely, because `NaN > n` is false and `slice(0, -9)` quietly returns `[]`; and a lossy row decode

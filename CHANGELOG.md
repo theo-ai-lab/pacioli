@@ -133,10 +133,10 @@ the changes landed on `main`.
 
 ### Fixed
 
-- (2026-08-01) Six ledger-verifier evasions, all found by the tamper drill on
-  its first run (51 escapes in 272 cases) and all instances of one API failure
-  class — *a verification function that succeeds on malformed input*. The
-  verifier now fails closed on: a **duplicate or NULL `seq`** (the walk orders
+- (2026-08-01) Seven escaping tamper classes — four distinct root causes — all
+  found by the tamper drill on its first run (51 escapes in 272 cases) and all
+  instances of one API failure class: *a verification function that succeeds on
+  malformed input*. The verifier now fails closed on: a **duplicate or NULL `seq`** (the walk orders
   by `seq`, so a tie was resolved by rowid and every link still held — while
   `seq` is also what bounded retention deletes by, letting an attacker pick the
   next prune's victim); a **negative or non-numeric `rootCount`**, which retired
