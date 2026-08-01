@@ -16,7 +16,8 @@
  * honest: if a boundary ever moves, this file goes red and the claim gets re-stated deliberately.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, copyFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tryCreateSqliteStore, type StoredReceipt } from "./receipt-store";
@@ -101,5 +102,35 @@ describe("ledger tamper drill", () => {
   it("is reproducible — the same seeds produce the same report", async () => {
     const again = await runTamperDrill({ ledger: LEDGER, workdir: join(dir, "cases-again"), seeds: SEEDS });
     expect(again).toEqual(report);
+  }, 120_000);
+
+  it("the CI GATE is the exit code, so the exit code is what gets locked", () => {
+    // The drill only protects anything because a hole exits non-zero. Point it at a ledger that is
+    // ALREADY tampered with and the negative control fails — at which point nothing the drill measured
+    // means anything, and it must refuse to report success rather than print a 100% caught rate over a
+    // broken baseline.
+    const cli = (...a: string[]): ReturnType<typeof spawnSync> =>
+      spawnSync(process.execPath, [join("node_modules", "tsx", "dist", "cli.mjs"), "lib/store/tamper-drill-cli.ts", ...a], {
+        encoding: "utf8",
+      });
+
+    expect(cli("--help").status).toBe(0);
+    expect(cli("--seeds", "not-a-number").status).toBe(2); // bad usage is not the same as a finding
+
+    const clean = cli(LEDGER, "--seeds", "1");
+    expect(clean.status).toBe(0); // a sound ledger exits 0 — the gate must not be a gate that always fires
+    expect(clean.stdout).toContain("DRILLED");
+
+    const tampered = join(dir, "control-broken.db");
+    copyFileSync(LEDGER, tampered);
+    const raw = spawnSync(
+      process.execPath,
+      ["-e", `const {DatabaseSync}=require("node:sqlite");const d=new DatabaseSync(process.argv[1]);d.exec("UPDATE receipts SET merchant='Forged' WHERE seq=2");d.close();`, tampered],
+      { encoding: "utf8" },
+    );
+    expect(raw.status).toBe(0);
+    const out = cli(tampered, "--seeds", "1");
+    expect(out.status).toBe(1);
+    expect(out.stderr).toContain("NEGATIVE CONTROL");
   }, 120_000);
 });
