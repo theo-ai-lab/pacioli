@@ -27,7 +27,7 @@ import { createRequire } from "node:module";
 import { tryCreateSqliteStore, type StoredReceipt } from "./receipt-store";
 import { verifyLedger } from "./verify-ledger";
 import { anchorFromLedger, type LedgerAnchor } from "./ledger-anchor";
-import { GENESIS, WHOLE_STORE, scopeRoot } from "./ledger-chain";
+import { GENESIS, WHOLE_STORE, scopeRoot, leafHash, entryHashFor } from "./ledger-chain";
 
 const dir = mkdtempSync(join(tmpdir(), "pacioli-anchor-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -100,7 +100,8 @@ describe("an anchor answers the question the walk cannot", () => {
     expect(fault).toBeDefined();
     // The operator has to learn WHAT diverged, not merely that something did.
     expect(fault!.detail).toContain("5");
-    expect(fault!.expected).toBe(anchor.root);
+    expect(fault!.expected).toContain(anchor.root);
+    expect(fault!.expected).toContain(`count=${anchor.count}`);
   });
 
   it("passes an untampered ledger against its own anchor", async () => {
@@ -133,5 +134,118 @@ describe("the report says whether it was anchored at all", () => {
     const anchor: LedgerAnchor = await anchorFromLedger(ledger);
     const report = await verifyLedger(ledger, { anchor });
     expect(report.anchored).toBe(true);
+  });
+});
+
+// ── the variant that actually pins head and root ──────────────────────────────
+//
+// Every mismatch test above differs in COUNT, so the count comparison alone catches
+// all of them — deleting the root and head comparisons leaves this file green. An
+// adversarial review proved exactly that by deleting both lines and watching 54/54
+// still pass. The commit that added them claimed to be mutation-verified; the
+// mutation removed the whole `if (diffs.length > 0)` block, which the count
+// comparison covered, so the two lines the feature exists for were never pinned.
+//
+// `boundary-full-reseal-rewrite` is the variant that preserves the receipt count and
+// moves only the hashes. It is named in this file's own header as a boundary being
+// closed, and until now it was never implemented here.
+
+/** The attacker: edit a receipt, then re-derive every leaf, link, head and root. */
+async function editAndReseal(path: string): Promise<void> {
+  const require_ = createRequire(import.meta.url);
+  const { DatabaseSync } = require_("node:sqlite") as {
+    DatabaseSync: new (p: string) => {
+      prepare(sql: string): { all(...a: unknown[]): unknown[]; run(...a: unknown[]): void };
+      close(): void;
+    };
+  };
+  const db = new DatabaseSync(path);
+  const rows = db.prepare(`SELECT * FROM receipts ORDER BY seq ASC`).all() as Record<string, any>[];
+  // Flip one receipt's verdict — the tamper a forger actually wants.
+  // rows[0] is mk(1): unbalanced, one finding, a non-null delta. Editing a row that
+  // already had the target values would be a no-op re-seal and prove nothing.
+  rows[0].balanced = 1;
+  rows[0].findingTypes = "";
+  rows[0].deltaUsd = null;
+  db.prepare(`UPDATE receipts SET balanced = 1, findingTypes = '', deltaUsd = NULL WHERE receiptId = ?`).run(
+    rows[0].receiptId,
+  );
+
+  let prev = GENESIS;
+  const leaves: string[] = [];
+  for (const r of rows) {
+    const leaf = await leafHash({
+      receiptId: r.receiptId,
+      receiptHash: r.receiptHash,
+      balanced: r.balanced === 1,
+      findingTypes: r.findingTypes ? String(r.findingTypes).split(",") : [],
+      agent: r.agent,
+      merchant: r.merchant,
+      deltaUsd: r.deltaUsd,
+      createdAt: r.createdAt,
+      sessionKey: r.sessionKey ?? undefined,
+    });
+    const entry = await entryHashFor(prev, leaf);
+    db.prepare(`UPDATE receipts SET leafHash = ?, prevHash = ?, entryHash = ? WHERE receiptId = ?`).run(
+      leaf,
+      prev,
+      entry,
+      r.receiptId,
+    );
+    leaves.push(leaf);
+    prev = entry;
+  }
+  db.prepare(`UPDATE chain_state SET count = ?, head = ?, root = ?, rootCount = ? WHERE scope = ?`).run(
+    leaves.length,
+    prev,
+    await scopeRoot(leaves),
+    leaves.length,
+    WHOLE_STORE,
+  );
+  db.close();
+}
+
+describe("the re-seal that keeps the count", () => {
+  it("passes the unanchored walk — the boundary, with the count unchanged", async () => {
+    await editAndReseal(ledger);
+    const report = await verifyLedger(ledger);
+    expect({ ok: report.ok, receipts: report.receipts }).toEqual({ ok: true, receipts: 5 });
+  });
+
+  it("is CAUGHT by the anchor, and the count comparison is not what catches it", async () => {
+    const anchor = await anchorFromLedger(ledger);
+    await editAndReseal(ledger);
+
+    const report = await verifyLedger(ledger, { anchor });
+    expect(report.ok).toBe(false);
+    const fault = report.faults.find((f) => f.kind === "anchor-mismatch");
+    expect(fault).toBeDefined();
+    // The count is IDENTICAL, so only root/head can have produced this fault. Delete
+    // either comparison and this test goes red — which the wipe tests never did.
+    expect(fault!.detail).toMatch(/root .* is not the anchored/);
+    expect(fault!.detail).toMatch(/head .* is not the anchored/);
+    // No count divergence is reported, because there is none. That is the whole
+    // point: only the root and head comparisons can have produced this fault, so
+    // deleting either one turns this test red — which no wipe-based test does.
+    expect(fault!.detail).not.toMatch(/receipt\(s\) present/);
+  });
+
+  it("reports what actually diverged in the structured fields, not always the root", async () => {
+    const anchor = await anchorFromLedger(ledger);
+    await editAndReseal(ledger);
+    const report = await verifyLedger(ledger, { anchor });
+    const fault = report.faults.find((f) => f.kind === "anchor-mismatch")!;
+    // expected/actual used to be hardcoded to the root, so a machine reader could see
+    // expected === actual while head and count had both moved.
+    expect(fault.expected).not.toBe(fault.actual);
+    expect(fault.expected).toContain("count=5");
+  });
+});
+
+describe("anchored is never true when nothing was compared", () => {
+  it("a null anchor from a JS caller does not set anchored", async () => {
+    // The TS type forbids this; the field exists for consumers that are not in TS.
+    const report = await verifyLedger(ledger, { anchor: null as unknown as undefined });
+    expect(report.anchored).toBe(false);
   });
 });

@@ -189,7 +189,13 @@ export async function verifyLedger(
   path: string,
   opts: { anchor?: LedgerAnchor } = {},
 ): Promise<LedgerReport> {
-  const anchored = opts.anchor !== undefined;
+  // ONE value decides both whether we compare and what we report. These were two
+  // different predicates (`!== undefined` here, truthiness at the comparison), so a
+  // caller passing `{ anchor: null }` — a JS consumer, a `?? null`, a JSON round trip —
+  // got `anchored: true` with nothing compared. The field exists precisely for that
+  // consumer, so it must never be able to overstate.
+  const anchor = opts.anchor ?? null;
+  const anchored = anchor !== null;
   const fail = (f: LedgerFault): LedgerReport => ({
     ok: false,
     path,
@@ -510,16 +516,16 @@ export async function verifyLedger(
       }
     }
 
-    if (opts.anchor) {
-      const whole = scopes.find((s) => s.scope === WHOLE_STORE);
-      const a = opts.anchor;
+    if (anchor) {
+      const anchoredScope = scopes.find((s) => s.scope === WHOLE_STORE);
+      const a = anchor;
       const diffs: string[] = [];
-      if (!whole) {
+      if (!anchoredScope) {
         diffs.push(`the store has no whole-store commitment at all, but the anchor commits to ${a.count} receipt(s)`);
       } else {
-        if (whole.root !== a.root) diffs.push(`root ${whole.root} is not the anchored ${a.root}`);
-        if (whole.head !== a.head) diffs.push(`head ${whole.head} is not the anchored ${a.head}`);
-        if (whole.receipts !== a.count) diffs.push(`${whole.receipts} receipt(s) present, anchor commits to ${a.count}`);
+        if (anchoredScope.root !== a.root) diffs.push(`root ${anchoredScope.root} is not the anchored ${a.root}`);
+        if (anchoredScope.head !== a.head) diffs.push(`head ${anchoredScope.head} is not the anchored ${a.head}`);
+        if (anchoredScope.receipts !== a.count) diffs.push(`${anchoredScope.receipts} receipt(s) present, anchor commits to ${a.count}`);
       }
       if (diffs.length > 0) {
         faults.push({
@@ -529,8 +535,13 @@ export async function verifyLedger(
             `the file is self-consistent but it is NOT the ledger anchored at ${a.sealedAt}: ` +
             diffs.join('; ') +
             `. A whole-ledger re-seal produces exactly this: a valid record of a different history.`,
-          expected: a.root,
-          actual: whole?.root ?? "(none)",
+          // Carry the whole commitment, not just the root: hardcoding the root meant a
+          // ledger extended past its sealed prefix reported expected === actual while
+          // head and count had both diverged, telling a machine reader nothing moved.
+          expected: `root=${a.root} head=${a.head} count=${a.count}`,
+          actual: anchoredScope
+            ? `root=${anchoredScope.root} head=${anchoredScope.head} count=${anchoredScope.receipts}`
+            : "(no whole-store commitment)",
         });
       }
     }

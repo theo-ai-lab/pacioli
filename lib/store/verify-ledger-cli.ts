@@ -25,25 +25,45 @@ Take one with 'npm run anchor:ledger -- <db> > anchor.json' and keep it off the 
 
 Exit codes:  0 = the ledger verifies   1 = tampering or an unverifiable store   2 = bad usage`;
 
-function optionValue(args: string[], flag: string): string | undefined {
+/**
+ * Read `--flag value` or `--flag=value`.
+ *
+ * Returns the flag's presence separately from its value, because the two used to be
+ * conflated: `--anchor` as the LAST argument yielded `undefined`, which read as "no
+ * anchor requested" and produced a silent unanchored PASS at exit 0. On a
+ * security-critical flag, a malformed invocation must fail, never downgrade. The
+ * equals form was not parsed at all and degraded the same way.
+ */
+function option(args: string[], flag: string): { present: boolean; value?: string } {
+  const eq = args.find((a) => a.startsWith(`${flag}=`));
+  if (eq !== undefined) return { present: true, value: eq.slice(flag.length + 1) };
   const i = args.indexOf(flag);
-  return i >= 0 ? args[i + 1] : undefined;
+  if (i < 0) return { present: false };
+  return { present: true, value: args[i + 1] };
 }
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2).filter((a) => a !== "--");
   const json = args.includes("--json");
-  const anchorPath = optionValue(args, "--anchor");
+  const anchorOpt = option(args, "--anchor");
+  const anchorPath = anchorOpt.value;
   // The anchor path is a value, not a target — without this the db would be read from it.
   const path = args.find((a) => !a.startsWith("-") && a !== anchorPath);
-  if (!path || args.includes("--help") || args.includes("-h")) {
+  // --help means "explain yourself", never "the ledger verifies". Returning 0 here
+  // handed a CI step a green gate on zero evidence when a stray flag crept onto the
+  // line, and exit 0 is documented as "the ledger verifies".
+  if (args.includes("--help") || args.includes("-h")) {
     console.log(USAGE);
-    return path ? 0 : 2;
+    return 2;
+  }
+  if (!path) {
+    console.log(USAGE);
+    return 2;
   }
 
   let anchor: LedgerAnchor | undefined;
-  if (anchorPath !== undefined) {
-    if (anchorPath === "" || anchorPath.startsWith("-")) {
+  if (anchorOpt.present) {
+    if (anchorPath === undefined || anchorPath === "" || anchorPath.startsWith("-")) {
       console.error(`FAILED — --anchor needs a file path.`);
       return 2;
     }
