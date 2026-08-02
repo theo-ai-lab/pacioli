@@ -79,8 +79,26 @@ export function parseAnchor(text: string): LedgerAnchor {
       throw new Error(`anchor field ${k} is not a readable count`);
     }
   }
+  // A root is sealed OVER leaves, so it can never cover more than exist. verify-ledger
+  // rejects exactly this shape in chain_state; an anchor claiming it is malformed for
+  // the same reason, and accepting it would let a nonsense commitment drive the
+  // extension check.
+  if ((o.rootCount as number) > (o.count as number)) {
+    throw new Error(
+      `anchor commits a root over ${o.rootCount} leaves but only ${o.count} receipt(s) — not a readable commitment`,
+    );
+  }
+  // Scope was serialised, coerced from anything, and then never compared. The
+  // comparison only ever handles the whole store, so an anchor naming any other scope
+  // is one this verifier cannot honour — refusing it beats silently rewriting it to ""
+  // and reporting a confident verdict about a different scope than the file claims.
+  if (o.scope !== undefined && o.scope !== WHOLE_STORE) {
+    throw new Error(
+      `anchor scope ${JSON.stringify(o.scope)} is not the whole store — only whole-store anchors are supported`,
+    );
+  }
   return {
-    scope: typeof o.scope === "string" ? o.scope : WHOLE_STORE,
+    scope: WHOLE_STORE,
     head: o.head as string,
     root: o.root as string,
     count: o.count as number,
