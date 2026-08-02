@@ -9,24 +9,55 @@
  *
  * Read-only: the database is opened read-only and nothing here writes.
  */
+import { readFileSync } from "node:fs";
 import { verifyLedger } from "./verify-ledger";
+import { parseAnchor, type LedgerAnchor } from "./ledger-anchor";
 
 const USAGE = `pacioli verify:ledger — audit a persisted receipt store
 
-  npm run verify:ledger -- <path/to/receipts.db> [--json]
+  npm run verify:ledger -- <path/to/receipts.db> [--anchor <anchor.json>] [--json]
+
+Without --anchor this proves the file is INTERNALLY CONSISTENT. That is not the same as
+proving it is the ledger you committed to: an adversary with write access can edit a
+receipt and re-derive every leaf, link and root, and the result passes this walk. Only a
+commitment taken earlier and kept where that adversary cannot reach it detects the swap.
+Take one with 'npm run anchor:ledger -- <db> > anchor.json' and keep it off the box.
 
 Exit codes:  0 = the ledger verifies   1 = tampering or an unverifiable store   2 = bad usage`;
+
+function optionValue(args: string[], flag: string): string | undefined {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : undefined;
+}
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2).filter((a) => a !== "--");
   const json = args.includes("--json");
-  const path = args.find((a) => !a.startsWith("-"));
+  const anchorPath = optionValue(args, "--anchor");
+  // The anchor path is a value, not a target — without this the db would be read from it.
+  const path = args.find((a) => !a.startsWith("-") && a !== anchorPath);
   if (!path || args.includes("--help") || args.includes("-h")) {
     console.log(USAGE);
     return path ? 0 : 2;
   }
 
-  const report = await verifyLedger(path);
+  let anchor: LedgerAnchor | undefined;
+  if (anchorPath !== undefined) {
+    if (anchorPath === "" || anchorPath.startsWith("-")) {
+      console.error(`FAILED — --anchor needs a file path.`);
+      return 2;
+    }
+    try {
+      anchor = parseAnchor(readFileSync(anchorPath, "utf8"));
+    } catch (err) {
+      // Fail closed: an unreadable anchor must never degrade into an unanchored pass, which is
+      // the one outcome an attacker who can delete the anchor file would be hoping for.
+      console.error(`FAILED — could not read the anchor at ${anchorPath}: ${(err as Error).message}`);
+      return 1;
+    }
+  }
+
+  const report = await verifyLedger(path, { anchor });
 
   if (json) {
     console.log(JSON.stringify(report, null, 2));
@@ -42,7 +73,22 @@ async function main(): Promise<number> {
         `  ${name.padEnd(28)} ${String(s.receipts).padStart(6)} receipts · root ${s.root.slice(0, 16)}… (sealed over ${s.rootCount})`,
       );
     }
-    console.log("VERIFIED — every receipt hashes to its committed leaf and every link holds.");
+    // Two different claims must not share one word. Without an anchor this walk cannot rule out a
+    // whole-ledger re-seal, so it does not get to say the word that implies it did.
+    if (report.anchored) {
+      console.log(
+        `VERIFIED — every receipt hashes to its committed leaf, every link holds, and the head and` +
+          ` root match the anchor taken at ${anchor!.sealedAt}.`,
+      );
+    } else {
+      console.log(
+        `SELF-CONSISTENT — every receipt hashes to its committed leaf and every link holds.\n` +
+          `  NOT ANCHORED: this does not rule out a whole-ledger re-seal, in which an adversary with` +
+          ` write access\n  edits a receipt and re-derives every leaf, link and root. Such a file` +
+          ` passes this walk.\n  Compare against a commitment kept off this machine:` +
+          ` --anchor <anchor.json>`,
+      );
+    }
     return 0;
   }
 

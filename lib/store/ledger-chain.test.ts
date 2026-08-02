@@ -239,7 +239,11 @@ describe("persisted ledger — hash chain + per-session Merkle root", () => {
 
     const clean = cli("dataset/reference-ledger.db");
     expect(clean.status).toBe(0);
-    expect(clean.stdout).toContain("VERIFIED");
+    // An unanchored walk proves self-consistency, which a whole-ledger re-seal also satisfies. It
+    // must NOT print the word that implies more than it checked; see lib/store/ledger-anchor.ts.
+    expect(clean.stdout).toContain("SELF-CONSISTENT");
+    expect(clean.stdout).toContain("NOT ANCHORED");
+    expect(clean.stdout).not.toContain("VERIFIED —");
 
     const copy = join(dir, "reference-tampered.db");
     copyFileSync("dataset/reference-ledger.db", copy);

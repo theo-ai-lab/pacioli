@@ -66,3 +66,5 @@ deliberately and the claim gets re-stated with it.
 | `boundary-seq-renumber` | renumber every position while KEEPING their order: seq is read as an order and is not among the facts a leaf commits to | 8 | 8/8 |
 
 Catching a full re-seal from the file alone is impossible by construction — the adversary rewrites the evidence and the record of the evidence in one pass. It needs an off-box anchor (a published root, or a signature over it), which is why the roots are exposed rather than kept internal.
+
+**The anchor exists now, so these two stay boundaries only for the file-alone walk.** `npm run anchor:ledger -- <db> --out anchor.json` commits to the whole store's head, root and count; `npm run verify:ledger -- <db> --anchor anchor.json` catches both re-seal classes with a located `anchor-mismatch`. They remain listed here as boundaries because that is what they are *for the unanchored walk this drill runs*, and moving them into the in-model set would claim a detection the drill does not itself perform. The anchored path is proven separately in [`ledger-anchor.test.ts`](../lib/store/ledger-anchor.test.ts).

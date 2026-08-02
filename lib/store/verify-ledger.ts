@@ -11,6 +11,8 @@
 // MAX_POSITION is the WRITER's constant too (the store refuses to allocate past it) — one definition,
 // so the reader and the writer cannot drift into disagreeing about where the edge is.
 import { GENESIS, WHOLE_STORE, MAX_POSITION, leafHash, entryHashFor, scopeRoot, type LedgerFacts } from "./ledger-chain";
+// Type-only: the anchor module imports verifyLedger, so a value import here would be a cycle.
+import type { LedgerAnchor } from "./ledger-anchor";
 
 export type FaultKind =
   | "unreadable" // the file isn't a readable receipt store
@@ -24,7 +26,8 @@ export type FaultKind =
   | "malformed-state" // a committed counter is not a number a check can be run against
   | "count-mismatch" // the committed count doesn't match the rows that survive
   | "head-mismatch" // the committed head isn't the last entry in the chain
-  | "root-mismatch"; // the committed Merkle root doesn't match the leaves it was sealed over
+  | "root-mismatch" // the committed Merkle root doesn't match the leaves it was sealed over
+  | "anchor-mismatch"; // self-consistent, but not the ledger the anchor committed to
 
 export interface LedgerFault {
   kind: FaultKind;
@@ -49,6 +52,14 @@ export interface ScopeReport {
 
 export interface LedgerReport {
   ok: boolean;
+  /**
+   * Was this checked against an off-box anchor?
+   *
+   * A walk proves internal self-consistency, which a whole-ledger re-seal also satisfies. Without
+   * an anchor, `ok: true` means "this file is consistent", NOT "this is the ledger you committed
+   * to". The two readings are far apart, so the difference is a field rather than a footnote.
+   */
+  anchored: boolean;
   path: string;
   receipts: number;
   scopes: ScopeReport[];
@@ -174,8 +185,19 @@ const counter = (v: unknown): number | null => {
 };
 
 /** Verify a persisted receipt store. Never mutates it. */
-export async function verifyLedger(path: string): Promise<LedgerReport> {
-  const fail = (f: LedgerFault): LedgerReport => ({ ok: false, path, receipts: 0, scopes: [], faults: [f] });
+export async function verifyLedger(
+  path: string,
+  opts: { anchor?: LedgerAnchor } = {},
+): Promise<LedgerReport> {
+  const anchored = opts.anchor !== undefined;
+  const fail = (f: LedgerFault): LedgerReport => ({
+    ok: false,
+    path,
+    receipts: 0,
+    scopes: [],
+    faults: [f],
+    anchored,
+  });
 
   let db: RawDb;
   try {
@@ -223,7 +245,7 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
           .all() as Record<string, unknown>[]
       ).map(decodeRow);
     } catch (e) {
-      return { ok: false, path, receipts: 0, scopes: [], faults: [unreadablePositions(db, e as Error)] };
+      return { ok: false, path, receipts: 0, scopes: [], faults: [unreadablePositions(db, e as Error)], anchored };
     }
 
     // THE COMMITTED COUNTERS, VALIDATED BEFORE ANYTHING IS INFERRED FROM THEM. Every one of these
@@ -277,7 +299,7 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
       });
     }
     if (malformedState.length > 0) {
-      return { ok: false, path, receipts: rows.length, scopes: [], faults: malformedState };
+      return { ok: false, path, receipts: rows.length, scopes: [], faults: malformedState, anchored };
     }
 
     const faults: LedgerFault[] = [];
@@ -488,7 +510,32 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
       }
     }
 
-    return { ok: faults.length === 0, path, receipts: rows.length, scopes, faults };
+    if (opts.anchor) {
+      const whole = scopes.find((s) => s.scope === WHOLE_STORE);
+      const a = opts.anchor;
+      const diffs: string[] = [];
+      if (!whole) {
+        diffs.push(`the store has no whole-store commitment at all, but the anchor commits to ${a.count} receipt(s)`);
+      } else {
+        if (whole.root !== a.root) diffs.push(`root ${whole.root} is not the anchored ${a.root}`);
+        if (whole.head !== a.head) diffs.push(`head ${whole.head} is not the anchored ${a.head}`);
+        if (whole.receipts !== a.count) diffs.push(`${whole.receipts} receipt(s) present, anchor commits to ${a.count}`);
+      }
+      if (diffs.length > 0) {
+        faults.push({
+          kind: "anchor-mismatch",
+          scope: WHOLE_STORE,
+          detail:
+            `the file is self-consistent but it is NOT the ledger anchored at ${a.sealedAt}: ` +
+            diffs.join('; ') +
+            `. A whole-ledger re-seal produces exactly this: a valid record of a different history.`,
+          expected: a.root,
+          actual: whole?.root ?? "(none)",
+        });
+      }
+    }
+
+    return { ok: faults.length === 0, path, receipts: rows.length, scopes, faults, anchored };
   } finally {
     db.close();
   }

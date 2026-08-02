@@ -105,6 +105,18 @@ to its position. So the durable store is a chain, not just a table
 > commitment made *before* the rewrite and kept *outside* the file (an off-box copy of a root, or a
 > signature over one). Without such an anchor, a passing verification is a statement about integrity
 > since the last seal — not a statement about authorship.
+>
+> **That anchor now ships.** `npm run anchor:ledger -- <db> --out anchor.json` records the whole
+> store's head, root and count; `npm run verify:ledger -- <db> --anchor anchor.json` compares against
+> it and reports `anchor-mismatch` when the file is a valid record of a *different* history. The two
+> re-seal classes the drill pins as boundaries are caught this way, demonstrated end to end in
+> [`ledger-anchor.test.ts`](../lib/store/ledger-anchor.test.ts).
+>
+> The security lives in **custody, not in the code**: an anchor kept beside the database is taken by
+> whoever takes the database. What the code does guarantee is that the distinction is never silent —
+> an unanchored run prints `SELF-CONSISTENT … NOT ANCHORED` and sets `anchored: false` in the JSON
+> report, so a passing walk can no longer be read as a claim it never made. An unreadable anchor file
+> fails closed rather than degrading into an unanchored pass.
 
 | a change made directly to the sqlite file | caught by |
 |---|---|
