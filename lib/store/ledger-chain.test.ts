@@ -346,6 +346,27 @@ describe("verifier — fails closed on malformed input", () => {
     expect(report.faults[0].detail).toMatch(/position/i);
   });
 
+  it("LOCATES a seq outside the safe-integer range instead of dying with a bare RangeError", async () => {
+    // The out-of-range sibling of the two checks above, and the one the decode can never reach:
+    // node:sqlite refuses to hand an INTEGER wider than a double to JS, so the failure happens inside
+    // `.all()` — before any row exists to inspect. Left uncaught, verifyLedger() THROWS instead of
+    // returning a report: the CLI still exits non-zero (it catches at the top), but the operator is
+    // told "Value is too large to be represented as a JavaScript number" and not which row, and any
+    // programmatic caller (the drill walks a whole registry through this function) dies mid-run.
+    // A verifier that fails must fail LOCATED — that is the whole standard this file exists to hold.
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET seq = seq + 9007199254740992 WHERE receiptId = 'sha256:ccc'`);
+    db.close();
+
+    const report = await verifyLedger(path); // must RETURN a fault, not throw
+    expect(report.ok).toBe(false);
+    expect(report.faults[0].kind).toBe("malformed-row");
+    expect(report.faults[0].receiptId).toBe("sha256:ccc");
+    expect(report.faults[0].detail).toMatch(/seq/);
+    expect(report.faults[0].actual).toBe("9007199254740995");
+  });
+
   it("refuses a NULL sequence number rather than sorting it wherever sqlite likes", async () => {
     const path = freshCopy();
     const db = await rawOpen(path);
@@ -450,5 +471,117 @@ describe("verifier — fails closed on malformed input", () => {
     const report = await verifyLedger(freshCopy());
     expect(report.faults).toEqual([]);
     expect(report.ok).toBe(true);
+  });
+});
+
+/** mulberry32 — seeded, so "a space" below is a FIXED space and any failure is reproducible. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * `seq` IS READ, BUT NEVER COMMITTED TO — the residual, pinned.
+ *
+ * The leaf covers receiptId, receiptHash, balanced, findingTypes, agent, merchant, deltaUsd,
+ * createdAt and sessionKey. `seq` is not among them, so an order-PRESERVING renumbering of every
+ * position (`UPDATE receipts SET seq = seq*2`) is invisible to the verifier. That is only acceptable
+ * if nothing downstream depends on seq's absolute VALUE, and "nothing depends on it" is a claim about
+ * a space, not about one example: these are the invariant over a generated space of renumberings,
+ * asserted against the one decision that actually consumes seq — which rows bounded retention
+ * destroys. If a future change starts to depend on the value, this goes red and the doc gets rewritten.
+ */
+describe("seq — the walk's order, not a committed fact", () => {
+  /** A random strictly-increasing relabelling of the positions, in chain order. */
+  const renumber = async (path: string, rng: () => number): Promise<number[]> => {
+    const db = await rawOpen(path);
+    const ids = (db.prepare(`SELECT receiptId FROM receipts ORDER BY seq ASC`).all() as Array<{ receiptId: string }>).map(
+      (r) => String(r.receiptId),
+    );
+    const seqs: number[] = [];
+    let next = 1 + Math.floor(rng() * 1000);
+    for (const id of ids) {
+      seqs.push(next);
+      db.prepare(`UPDATE receipts SET seq = ? WHERE receiptId = ?`).run(next, id);
+      next += 1 + Math.floor(rng() * 1000);
+    }
+    db.close();
+    return seqs;
+  };
+
+  /** Drive a REAL retention prune (cap 3 over 4 rows ⇒ the two oldest go), then read what survived. */
+  const pruneAndRead = async (path: string): Promise<{ survivors: string[]; state: unknown[]; prunedSeq: number }> => {
+    const store = await tryCreateSqliteStore(path, { cap: 3 });
+    if (!store) throw new Error("node:sqlite unavailable");
+    await store.save(mk("sha256:zzz", true, [], undefined, 9000));
+    const db = await rawOpen(path);
+    const survivors = (db.prepare(`SELECT receiptId FROM receipts ORDER BY seq ASC`).all() as Array<{ receiptId: string }>).map(
+      (r) => String(r.receiptId),
+    );
+    // Everything a reader is ever shown, EXCEPT prunedSeq — the one column a renumbering moves.
+    const state = db
+      .prepare(`SELECT scope, head, count, root, rootCount, prunedHash, unchained FROM chain_state ORDER BY scope`)
+      .all();
+    const prunedSeq = Number(
+      (db.prepare(`SELECT prunedSeq AS s FROM chain_state WHERE scope = ''`).all() as Array<{ s: number }>)[0].s,
+    );
+    db.close();
+    return { survivors, state, prunedSeq };
+  };
+
+  it("PROPERTY: any order-preserving renumbering still verifies, and leaves every commitment byte-identical", async () => {
+    const baseline = freshCopy();
+    const commitments = async (p: string): Promise<unknown[]> => {
+      const db = await rawOpen(p);
+      const rows = db.prepare(`SELECT receiptId, leafHash, prevHash, entryHash FROM receipts ORDER BY seq ASC`).all();
+      const state = db.prepare(`SELECT scope, head, count, root, rootCount, prunedHash FROM chain_state ORDER BY scope`).all();
+      db.close();
+      return [rows, state];
+    };
+    const before = await commitments(baseline);
+
+    for (let seed = 1; seed <= 24; seed++) {
+      const path = freshCopy();
+      const seqs = await renumber(path, mulberry32(seed));
+      expect(seqs).toEqual([...seqs].sort((a, b) => a - b)); // the generator really is order-preserving
+      const report = await verifyLedger(path);
+      expect({ seed, ok: report.ok, faults: report.faults }).toEqual({ seed, ok: true, faults: [] });
+      expect(await commitments(path)).toEqual(before);
+    }
+  });
+
+  it("PROPERTY: …and a real retention prune destroys exactly the same rows, whatever the positions are", async () => {
+    // The claim that matters. `seq` picks a prune's victims, so if the absolute value mattered anywhere
+    // it would matter HERE: an attacker who renumbered could choose what the next legitimate prune
+    // deletes. It cannot — the ORDER decides, and the order is what the chain already commits to.
+    const control = await pruneAndRead(freshCopy());
+    expect(control.survivors).toEqual(["sha256:ccc", "sha256:ddd", "sha256:zzz"]);
+
+    for (let seed = 1; seed <= 24; seed++) {
+      const path = freshCopy();
+      await renumber(path, mulberry32(seed));
+      const after = await pruneAndRead(path);
+      expect({ seed, ...after, prunedSeq: 0 }).toEqual({ seed, ...control, prunedSeq: 0 });
+      const report = await verifyLedger(path);
+      expect({ seed, ok: report.ok, faults: report.faults }).toEqual({ seed, ok: true, faults: [] });
+    }
+  });
+
+  it("the ONLY thing a renumbering moves is prunedSeq — a column nothing ever reads back as a decision", async () => {
+    // Stated as a test so the exposure is bounded by execution rather than by assertion: the pruned
+    // anchor's POSITION differs (it is copied from the row that was deleted), while its HASH — the
+    // value the verifier actually anchors on — does not. Nothing in lib/ reads prunedSeq to decide
+    // anything; it is written, carried forward, and never consulted.
+    const control = await pruneAndRead(freshCopy());
+    const renumbered = freshCopy();
+    await renumber(renumbered, mulberry32(7));
+    const after = await pruneAndRead(renumbered);
+    expect(after.prunedSeq).not.toBe(control.prunedSeq);
+    expect(after.state).toEqual(control.state);
   });
 });

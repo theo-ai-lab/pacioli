@@ -97,6 +97,15 @@ to its position. So the durable store is a chain, not just a table
 `entryHash = chainHash(prevHash, leafHash)`; each scope — the whole store, plus every session ledger
 — commits a count, a head, and a Merkle root over its leaves.
 
+> **What a verification establishes, in one sentence.** `npm run verify:ledger` proves that the file
+> in front of you is **internally self-consistent** — every row still hashes to the leaf committed for
+> it, every link holds, and every scope's count, head and Merkle root match the rows that survive —
+> and it **cannot, from the file alone, establish that nobody re-sealed the whole ledger**, because a
+> file rewritten end to end is internally self-consistent too. Telling those two apart requires a
+> commitment made *before* the rewrite and kept *outside* the file (an off-box copy of a root, or a
+> signature over one). Without such an anchor, a passing verification is a statement about integrity
+> since the last seal — not a statement about authorship.
+
 | a change made directly to the sqlite file | caught by |
 |---|---|
 | a historical row edited in place | its `leafHash` no longer matches its contents |
@@ -109,12 +118,47 @@ to its position. So the durable store is a chain, not just a table
 | two rows colliding on one sequence number | `seq` is the walk's order, so it must BE an order — otherwise the chain is checked against a tie-break |
 | a row stored in a non-canonical encoding (text in `deltaUsd`, padded `findingTypes`, a verdict outside `{0,1}`) | the row→facts decode is injective, so "the leaf matches" still implies "the row is what was committed" |
 | a committed counter that isn't a number (`rootCount = -9`, `rootCount = 'x'`) | counters are validated *before* anything is inferred from them — a check that can't be run FAILS, it is never skipped |
+| a position pushed outside the safe-integer range (`seq += 2^53`) | the row read fails before a row exists to decode, so the failure is caught and **located** — a verifier that dies is not a verifier that reports |
 
 Covered honestly means covered *exactly*: the leaf commits to `receiptId`, `receiptHash`,
-`balanced`, `findingTypes`, `agent`, `merchant`, `deltaUsd`, `createdAt` and `sessionKey`. It
-deliberately does **not** cover `seenCount`, the mutable replay counter that a re-submission bumps in
-place — the chain commits to the immutable facts of each distinct receipt, not to how many times one
-was replayed. Three further limits, stated rather than buried: receipts written *before* the chain
+`balanced`, `findingTypes`, `agent`, `merchant`, `deltaUsd`, `createdAt` and `sessionKey` — and to
+nothing else. Two columns of every stored row are outside it, both deliberately.
+
+The first is `seenCount`, the mutable replay counter that a re-submission bumps in place: the chain
+commits to the immutable facts of each distinct receipt, not to how many times one was replayed.
+
+The second is **`seq`, the row's position — and only its *relative order* is load-bearing.** `seq`
+orders the verifier's walk, orders a scope's leaves and picks a retention prune's victims, but every
+one of those uses is relative, and the relative order is already committed to by `prevHash`/
+`entryHash`. So renumbering every position while preserving their order (`UPDATE receipts SET seq =
+seq * 2`) is **undetectable — and inert**: measured on copies of the committed reference ledger, the
+renumbered file still verifies (`ok`, no faults), a real prune driven through the store API afterwards
+destroys the *same* rows and spares the *same* survivors, and every leaf, link, head and root is
+byte-identical to the pristine run. The only value that moves anywhere in the file is
+`chain_state.prunedSeq`, which is written, carried forward, and never read back as a decision by
+anything. A renumbering that does **not** preserve the order is a different attack and is caught
+(`chain-break`, or the strict-increase check that also rejects duplicate and NULL positions).
+
+**We consider that acceptable, and the reason is that no decision depends on the value.** It is
+asserted rather than assumed: `boundary-seq-renumber` pins it in the tamper drill, and two seeded
+property tests in [`ledger-chain.test.ts`](../lib/store/ledger-chain.test.ts) assert over a *space* of
+24 generated order-preserving renumberings that the ledger still verifies, that every commitment is
+unchanged, and that a real prune destroys exactly the same rows. **Decision, recorded rather than
+left silent: `seq` is deliberately NOT added to the leaf facts.** Doing so changes every leaf hash in
+existence — the committed `dataset/reference-ledger.db` stops verifying immediately (measured:
+`[row-altered] seq 1 (sha256:0f3c1a2b4d5e6f70)`) and every deployed store would need regenerating —
+to close an exposure that cannot alter a verdict, a survivor set, or a commitment. If a future change
+ever makes seq's absolute value load-bearing, those property tests go red and this paragraph gets
+rewritten instead of quietly going out of date.
+
+One place where "inert" stops: pushing a position past 2^53 while still preserving the order is a
+**denial of service, not a forgery**. `node:sqlite` will not narrow an integer that wide into a JS
+number, so the store's next append rejects (the caller is told — `/api/reconcile` reports
+`stored: false`) and the verifier now reports a *located* `malformed-row` naming the row and the
+position, instead of dying with a bare `RangeError` that names nothing. That is the honest split:
+integrity holds, availability is what an attacker with write access can take.
+
+Three further limits, stated rather than buried: receipts written *before* the chain
 existed carry no commitment and the verifier refuses to certify them instead of passing them
 silently; bounded retention legitimately prunes the oldest rows, so a prune is **recorded** (the
 chain keeps the last pruned entry as its anchor and the affected scopes re-seal) rather than left
@@ -128,9 +172,10 @@ together: an attacker who deletes the **oldest** receipts and re-anchors the cha
 does is indistinguishable, *from the file alone*, from bounded retention doing its job — that is what
 it means for pruning to be legitimate. What still bounds it: the pruned range must be a **prefix**
 (nothing can be lifted out of the middle without breaking a link), and any off-box copy of an older
-root contradicts it immediately. All four boundaries — `seenCount`, a full re-seal, a wiped ledger,
-and this prefix prune — are **pinned by the drill** as cases that must still verify, so if one ever
-starts failing, this paragraph gets rewritten deliberately instead of quietly going out of date.
+root contradicts it immediately. All five boundaries — `seenCount`, an order-preserving `seq`
+renumbering, a full re-seal, a wiped ledger, and this prefix prune — are **pinned by the drill** as
+cases that must still verify, so if one ever starts failing, this paragraph gets rewritten
+deliberately instead of quietly going out of date.
 
 ```bash
 npm run verify:ledger -- receipts.db      # exit 0 verified · exit 1 with the located fault

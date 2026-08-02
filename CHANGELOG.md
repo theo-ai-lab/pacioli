@@ -13,6 +13,31 @@ the changes landed on `main`.
 
 ### Added
 
+- (2026-08-01) The two informational residuals of the ledger chain are now
+  **stated where a reader hits them, and pinned by execution**.
+  (1) `seq` is read but never committed to: the leaf covers nine immutable
+  facts and `seq` is not among them, so renumbering every position while
+  preserving their order is undetectable — and inert, because only the
+  *relative* order is load-bearing and the order is already committed to by
+  `prevHash`/`entryHash`. Established on copies of the committed reference
+  ledger: the renumbered file verifies with no faults, a real prune driven
+  through the store API afterwards destroys the same rows and spares the same
+  survivors, and every leaf, link, head and root is byte-identical; the only
+  value that moves is `chain_state.prunedSeq`, which nothing ever reads back as
+  a decision. Pinned by a new `boundary-seq-renumber` drill class and by two
+  seeded property tests over a space of 24 generated order-preserving
+  renumberings. **Recorded decision: `seq` is deliberately NOT added to the leaf
+  facts** — doing so changes every leaf hash in existence and stops the
+  committed `dataset/reference-ledger.db` verifying, to close an exposure that
+  cannot alter a verdict, a survivor set or a commitment.
+  (2) The re-seal boundary is now stated in one unmissable sentence in
+  [`docs/VERIFICATION.md`](docs/VERIFICATION.md) and in the README's claim
+  table: verification establishes the file's **internal self-consistency**, and
+  cannot establish, from the file alone, that nobody re-sealed the whole ledger
+  — telling those apart requires a commitment made before the rewrite and kept
+  outside the file. In-model drill coverage is unchanged (33 classes · 264
+  cases · 264 caught · 0 escapes); the pinned boundaries go from four to five.
+
 - (2026-08-01) Ledger tamper drill (`npm run drill:tamper`): a scripted
   adversary with write access to the sqlite file mutates a **copy** of the
   committed reference store one class at a time — edit, delete, reorder,
@@ -132,6 +157,21 @@ the changes landed on `main`.
   (README-named routes plus the API routes the demo pages call).
 
 ### Fixed
+
+- (2026-08-01) The ledger verifier died instead of reporting when a row's `seq`
+  sat outside the safe-integer range. `seq` is a sqlite `INTEGER` (int64) read
+  into a JS number, and `node:sqlite` refuses to narrow a value wider than a
+  double — so the throw happened inside the row read, *before* any row existed
+  for the decode to inspect, and `verifyLedger()` threw rather than returning a
+  report. The CLI still exited non-zero (it catches at the top), but it printed
+  a bare `Value is too large to be represented as a JavaScript number` naming no
+  row, and any programmatic caller — the tamper drill runs its whole registry
+  through this function — would abort mid-run. The read is now caught and the
+  offending positions re-read as TEXT, so the fault is a **located**
+  `malformed-row` naming the receipt and the position. Reachable by anyone with
+  write access to the file (`UPDATE receipts SET seq = seq + 2^53`); it is a
+  denial of service on future appends, not a forgery, and both halves now fail
+  loudly rather than silently.
 
 - (2026-08-01) Seven escaping tamper classes — four distinct root causes — all
   found by the tamper drill on its first run (51 escapes in 264 in-model cases) and all

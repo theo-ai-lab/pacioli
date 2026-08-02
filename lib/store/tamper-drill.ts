@@ -613,6 +613,23 @@ export const TAMPER_CLASSES: readonly TamperClass[] = [
     },
   },
   {
+    id: "boundary-seq-renumber",
+    model: "boundary",
+    what: "renumber every position while KEEPING their order: seq is read as an order and is not among the facts a leaf commits to",
+    async apply(db, ctx, rng) {
+      // The exposure this pins is real but INERT. `seq` orders the walk, orders a scope's leaves and
+      // chooses a prune's victims — but every one of those uses is RELATIVE, and an order-preserving
+      // renumbering leaves each of them deciding exactly what it decided before. What is NOT
+      // order-preserving is already in model above (`reorder-rows`, `duplicate-sequence-number`,
+      // `malformed-seq-null`), so this is precisely the residue: undetectable, and inert.
+      if (ctx.rows.length === 0) return null;
+      const scale = 2 + Math.floor(rng() * 8);
+      const offset = 1 + Math.floor(rng() * 1000);
+      db.prepare(`UPDATE receipts SET seq = seq * ? + ? WHERE leafHash IS NOT NULL`).run(scale, offset);
+      return `renumbered every position seq → seq*${scale}+${offset} (order preserved)`;
+    },
+  },
+  {
     id: "boundary-prefix-prune",
     model: "boundary",
     what: "delete the OLDEST receipts and record it as a prune — indistinguishable from bounded retention, which is the point of retention",

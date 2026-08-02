@@ -85,6 +85,7 @@ describe("ledger tamper drill", () => {
       "boundary-full-reseal-wipe",
       "boundary-prefix-prune",
       "boundary-seen-count",
+      "boundary-seq-renumber",
     ]);
     // A boundary case that starts FAILING means the verifier grew a new power (good) — but the claim
     // in docs/VERIFICATION.md then has to be re-stated deliberately, not drift.

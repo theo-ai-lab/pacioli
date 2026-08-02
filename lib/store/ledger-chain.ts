@@ -13,10 +13,36 @@
  * Merkle root. An edit breaks leafHash; a delete or a reorder breaks the prevHash link; a truncation
  * of the newest rows breaks count/head. `npm run verify:ledger -- <db>` walks all of it.
  *
- * WHAT THE LEAF COMMITS TO — and what it deliberately does not. `seenCount` is the mutable replay
- * counter (a replay of the same content-addressed receipt bumps it in place), so it is NOT covered:
- * the chain commits to the immutable facts of each distinct receipt, not to how many times it was
- * re-submitted. Everything else in the row is covered.
+ * WHAT THE LEAF COMMITS TO — and what it deliberately does not. Exactly two columns of a persisted
+ * row sit outside it, and both are deliberate:
+ *
+ *   `seenCount` — the mutable replay counter (a replay of the same content-addressed receipt bumps it
+ *     in place). The chain commits to the immutable facts of each DISTINCT receipt, not to how many
+ *     times one was re-submitted.
+ *
+ *   `seq` — the row's POSITION. It orders the walk, orders a scope's leaves and picks a prune's
+ *     victims, but every one of those uses is RELATIVE, and the relative order is ALREADY committed to,
+ *     by prevHash/entryHash. Only the order is load-bearing; the numbers themselves are not. So a
+ *     renumbering that preserves the order (`UPDATE receipts SET seq = seq*2`) is undetectable — and
+ *     inert: a real prune then destroys the same rows and spares the same survivors, every leaf, link,
+ *     head and root is byte-identical, and the single column that does move (`chain_state.prunedSeq`)
+ *     is written, carried forward and never read back as a decision by anything. A renumbering that
+ *     does NOT preserve the order is a different thing entirely and is caught (`chain-break`, or the
+ *     verifier's strict-increase check). Pinned by `boundary-seq-renumber` in the tamper drill and by
+ *     the seeded renumbering properties in ledger-chain.test.ts.
+ *
+ *     The limit of "inert": pushing a position past 2^53 while preserving the order is a DENIAL OF
+ *     SERVICE, not a forgery. node:sqlite will not narrow an integer that wide to a JS number, so the
+ *     store's next append REJECTS (the caller is told; /api/reconcile reports `stored: false`) and the
+ *     verifier reports a located `malformed-row` rather than walking. Availability, loudly — never a
+ *     receipt silently accepted or silently passed.
+ *
+ * DECISION, recorded rather than left silent: `seq` stays OUT of the leaf. Adding it would change
+ * every leaf hash that exists — the committed dataset/reference-ledger.db immediately stops verifying
+ * (measured: `[row-altered] seq 1 (sha256:0f3c1a2b4d5e6f70)`), and every deployed store would have to
+ * be regenerated — in exchange for closing an exposure that cannot alter a verdict, a survivor set or
+ * a commitment. The order is already committed to; paying that price for the numbering is not a trade
+ * worth making. Everything else in the row is covered.
  *
  * Zero new dependencies — the primitives are the engine's (`chainHash`, `merkleRoot`, Web Crypto).
  */

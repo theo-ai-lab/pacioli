@@ -127,6 +127,47 @@ function decodeRow(o: Record<string, unknown>): Row {
   };
 }
 
+/** The widest position that survives the trip through a JS number. Past it, `seq` is unreadable —
+ *  and the store cannot append past it either: `MAX(seq) + 1` is read the same way. */
+const MAX_POSITION = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Diagnose a row read that failed before any row could be decoded. The only known cause is a `seq`
+ * outside the safe-integer range, so look for exactly that — as TEXT, so the diagnosis itself cannot
+ * hit the same wall — and fall back to naming the raw failure rather than guessing.
+ */
+function unreadablePositions(db: RawDb, cause: Error): LedgerFault {
+  let offenders: Array<{ receiptId?: unknown; seqText?: unknown }> = [];
+  try {
+    // The bound is this module's own constant, never caller-supplied, and it is inlined rather than
+    // bound as a parameter deliberately: a bound JS number could reach sqlite as a double, and the
+    // whole point of this query is to compare int64s exactly at the edge of what a double can hold.
+    offenders = db
+      .prepare(
+        `SELECT receiptId, CAST(seq AS TEXT) AS seqText FROM receipts
+         WHERE seq > ${MAX_POSITION} OR seq < ${-MAX_POSITION} ORDER BY seq ASC`,
+      )
+      .all() as Array<{ receiptId?: unknown; seqText?: unknown }>;
+  } catch {
+    offenders = [];
+  }
+  if (offenders.length === 0) {
+    return { kind: "unreadable", detail: `${cause.message} — the receipts of this store could not be read` };
+  }
+  const first = offenders[0];
+  return {
+    kind: "malformed-row",
+    scope: WHOLE_STORE,
+    receiptId: String(first.receiptId),
+    expected: `a position within ±${MAX_POSITION}`,
+    actual: String(first.seqText),
+    detail:
+      `seq ${String(first.seqText)} (${String(first.receiptId)}): outside the range a position can be read in — ` +
+      `${offenders.length} row(s) are. The ledger cannot be walked at all, and the store cannot append to it either ` +
+      `(its next position is read the same way), so every receipt in it is unattested until they are restored.`,
+  };
+}
+
 /** A committed counter, or null when it is not a number a check could be run against. */
 const counter = (v: unknown): number | null => {
   const n = Number(v);
@@ -163,15 +204,28 @@ export async function verifyLedger(path: string): Promise<LedgerReport> {
       });
     }
 
-    const rows = (
-      db
-        .prepare(
-          `SELECT receiptId, receiptHash, balanced, findingTypes, agent, merchant, deltaUsd, createdAt,
+    // THE ROW READ CAN FAIL BEFORE A ROW EXISTS TO INSPECT. `seq` is a sqlite INTEGER (int64) but it
+    // is read into a JS number, and node:sqlite refuses to narrow a value wider than a double — it
+    // throws inside `.all()`. `decodeRow` therefore CANNOT reach this case: there is nothing decoded
+    // yet. Left uncaught the whole verifier throws, and a verifier that dies is not the same thing as
+    // a verifier that reports: the CLI would print a bare "Value is too large…" naming no row, and a
+    // programmatic caller (the tamper drill runs a whole registry through this function) would abort
+    // mid-run. So catch it and LOCATE it — the offending positions are re-read as TEXT, which never
+    // crosses the number boundary at all.
+    let rows: Row[];
+    try {
+      rows = (
+        db
+          .prepare(
+            `SELECT receiptId, receiptHash, balanced, findingTypes, agent, merchant, deltaUsd, createdAt,
                   sessionKey, seq, leafHash, prevHash, entryHash FROM receipts
            WHERE leafHash IS NOT NULL ORDER BY seq ASC`,
-        )
-        .all() as Record<string, unknown>[]
-    ).map(decodeRow);
+          )
+          .all() as Record<string, unknown>[]
+      ).map(decodeRow);
+    } catch (e) {
+      return { ok: false, path, receipts: 0, scopes: [], faults: [unreadablePositions(db, e as Error)] };
+    }
 
     // THE COMMITTED COUNTERS, VALIDATED BEFORE ANYTHING IS INFERRED FROM THEM. Every one of these
     // GATES a check — `rootCount` decides how many leaves the root is compared over — and a gate that
