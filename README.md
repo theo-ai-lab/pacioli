@@ -9,7 +9,18 @@ subscribed — against what the **evidence** shows, and prints a receipt when th
 
 ![The Pacioli demo: an agent claim and a confirmation reconciled into a receipt](docs/hero.png)
 
-> Spend trackers show you what was charged. Pacioli proves whether your agent told you the truth.
+> Spend trackers show you what was charged. Pacioli reconciles it against what you
+> **authorized** — deterministically, with a source citation on every finding — and
+> abstains out loud on the calls a rule cannot make.
+
+Read that second clause literally. The deterministic floor decides three conditions
+(overspend, scope creep, unauthorized recurrence) and **abstains** on whether an
+agent's prose was truthful, because a rule cannot decide that. On documented public
+incidents — which are overwhelmingly that fourth class — the floor alone classifies
+**2 of 17** correctly. That number is published in
+[`eval/RESULTS.md`](eval/RESULTS.md) rather than buried, and it is why the fuzzy
+residual routes to a gated, explicitly-marked judge instead of being absorbed into
+the headline.
 
 **[Live demo → pacioliapp.vercel.app](https://pacioliapp.vercel.app)** — paste a claim + a confirmation, get the receipt.
 **[/methods](https://pacioliapp.vercel.app/methods)** is the per-class eval · **[/ledger](https://pacioliapp.vercel.app/ledger)** is the live **record → reconcile → review** loop (forward a confirmation, watch it file into your own receipt ledger) plus real, source-cited failures as receipts · or run it locally in 30 seconds ([below](#run-it-locally)).
@@ -204,7 +215,7 @@ account of each mechanism is in
 | The judge's risk is bounded honestly | Clopper–Pearson upper bound on selective risk; the certificate's width is shown vs N — never a small-N headline | `npm run certify` | [`selective-risk.ts`](lib/engine/selective-risk.ts) |
 | The judge is a measured instrument | TPR/FPR, precision/recall, Cohen's κ vs human labels as Wilson intervals — **pending a key + labels** | `npm run calibrate` | [`judge-eval.ts`](lib/engine/judge-eval.ts) |
 | Externally grounded | **zero false positives** on the in-scope reference trajectories of τ²-bench's 164 real airline + retail tasks — a specificity check, not a benchmark score | `npm run bench:tau2` | [`bench/tau2/`](bench/tau2) |
-| CI re-proves all of it | typecheck · lint · tests · ledger audit · tamper drill · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness · a live local instance held to a fixture's verdict, on every push | — | [`ci.yml`](.github/workflows/ci.yml) |
+| CI re-proves the rows above it | typecheck · lint · tests · ledger audit · tamper drill · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness · a live local instance held to a fixture's verdict, on every push. **Not** re-run in CI: the equivalence, distillation and τ² rows above — those are on-demand commands, and their published numbers come from the last local run rather than from a job that would fail if they moved. | — | [`ci.yml`](.github/workflows/ci.yml) |
 
 ## Limitations & known failure modes
 
