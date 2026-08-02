@@ -249,3 +249,45 @@ describe("anchored is never true when nothing was compared", () => {
     expect(report.anchored).toBe(false);
   });
 });
+
+// ── an append and a re-seal must not read the same ────────────────────────────
+//
+// Both diverge from the anchor. Reporting them identically trains the operator to
+// answer every mismatch with "that was my append, re-anchor" — which, against a
+// re-seal, is the one action that commits to the attacker's history. A live store
+// appends constantly, so the training is continuous and the alarm is worthless.
+
+describe("a mismatch says whether the anchored history survived", () => {
+  it("an honest append is reported as EXTENDING the anchored ledger", async () => {
+    const anchor = await anchorFromLedger(ledger);
+    const s = await tryCreateSqliteStore(ledger);
+    await s!.save(mk(42));
+
+    const fault = (await verifyLedger(ledger, { anchor })).faults.find(
+      (f) => f.kind === "anchor-mismatch",
+    );
+    expect(fault!.detail).toContain("EXTENDS the anchored ledger");
+    expect(fault!.detail).not.toContain("different history");
+  });
+
+  it("a re-seal is reported as a DIFFERENT history, not an extension", async () => {
+    const anchor = await anchorFromLedger(ledger);
+    await editAndReseal(ledger);
+
+    const fault = (await verifyLedger(ledger, { anchor })).faults.find(
+      (f) => f.kind === "anchor-mismatch",
+    );
+    expect(fault!.detail).toContain("NOT intact");
+    expect(fault!.detail).not.toContain("EXTENDS");
+  });
+
+  it("a wipe is a different history too — there are no anchored leaves left", async () => {
+    const anchor = await anchorFromLedger(ledger);
+    await wipeAndReseal(ledger);
+
+    const fault = (await verifyLedger(ledger, { anchor })).faults.find(
+      (f) => f.kind === "anchor-mismatch",
+    );
+    expect(fault!.detail).toContain("NOT intact");
+  });
+});

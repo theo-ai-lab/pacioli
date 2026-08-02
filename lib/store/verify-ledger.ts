@@ -527,6 +527,24 @@ export async function verifyLedger(
         if (anchoredScope.head !== a.head) diffs.push(`head ${anchoredScope.head} is not the anchored ${a.head}`);
         if (anchoredScope.receipts !== a.count) diffs.push(`${anchoredScope.receipts} receipt(s) present, anchor commits to ${a.count}`);
       }
+      // An honest APPEND and a re-seal both diverge from the anchor, and reporting them
+      // identically is worse than it looks: the trained operator response to a mismatch
+      // is "that was just my append, re-anchor" — which, against a re-seal, is the
+      // action that commits to the attacker's history. A live store appends
+      // constantly, so that training is continuous.
+      //
+      // The material to tell them apart is already here. An append EXTENDS the anchored
+      // ledger: the first `a.rootCount` leaves still root to `a.root`. A re-seal
+      // rewrites those leaves, so they do not. Checking it costs one Merkle root over
+      // a prefix we already hold.
+      let extendsAnchor = false;
+      if (anchoredScope && diffs.length > 0 && a.rootCount > 0) {
+        const currentLeaves = leavesByScope.get(WHOLE_STORE) ?? [];
+        if (currentLeaves.length >= a.rootCount) {
+          extendsAnchor = (await scopeRoot(currentLeaves.slice(0, a.rootCount))) === a.root;
+        }
+      }
+
       if (diffs.length > 0) {
         faults.push({
           kind: "anchor-mismatch",
@@ -534,7 +552,9 @@ export async function verifyLedger(
           detail:
             `the file is self-consistent but it is NOT the ledger anchored at ${a.sealedAt}: ` +
             diffs.join('; ') +
-            `. A whole-ledger re-seal produces exactly this: a valid record of a different history.`,
+            (extendsAnchor
+              ? `. The anchored leaves are still intact underneath, so this EXTENDS the anchored ledger rather than replacing it — consistent with honest appends. Re-anchor only after confirming those appends are yours.`
+              : `. The anchored leaves are NOT intact: this is a different history, not an extension of the anchored one. Re-anchoring here would commit to it.`),
           // Carry the whole commitment, not just the root: hardcoding the root meant a
           // ledger extended past its sealed prefix reported expected === actual while
           // head and count had both diverged, telling a machine reader nothing moved.
