@@ -87,7 +87,7 @@ the exact confusion this ADR exists to remove.
 ### Add `seq` to the leaf so a renumbering is caught
 
 - Considered during the same investigation and **declined** — recorded in commit
-  `b1bcf73`. It changes every leaf hash in existence (measured: the committed
+  `99c27e0`. It changes every leaf hash in existence (measured: the committed
   `dataset/reference-ledger.db` immediately fails with `[row-altered] seq 1`) to close
   an exposure that cannot alter a verdict, a survivor set or a commitment.
 

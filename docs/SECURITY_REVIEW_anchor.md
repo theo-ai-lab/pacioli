@@ -1,6 +1,6 @@
 # Security review — the off-box anchor changeset
 
-**Range:** `f640e9a^..35355b0` (5 commits) · **Date:** 2026-08-02
+**Range:** `99aa98a^..7ea5c8d` (5 commits) · **Date:** 2026-08-02
 **Scope:** 11 files changed; small enough to read every dependency rather than sample.
 
 The anchor decides whether a ledger verifies, so the changeset that introduced it was read as
@@ -61,11 +61,11 @@ Threat model: an attacker with **write access to the sqlite file** (the repo's s
 | Edit a receipt, re-derive every leaf/link/head/root | Caught (root + head; count identical). Reported as **NOT intact**. |
 | Delete the anchor file | Fails closed — exit 1, never an unanchored pass. |
 | Truncate/corrupt the anchor file | Fails closed — `parseAnchor` throws, exit 1. |
-| Supply an anchor with `rootCount > count` | Refused (`35355b0`). Previously accepted and would have driven the extension check. |
-| Supply a session-scoped anchor | Refused (`35355b0`). Previously coerced to whole-store and verified against the wrong scope. |
-| Invoke with `--anchor` and no value, or `--anchor=path`, or a stray `--help` | Exit 2/1/2 (`fd362c6`). Each previously produced a **silent unanchored pass at exit 0**. |
+| Supply an anchor with `rootCount > count` | Refused (`7ea5c8d`). Previously accepted and would have driven the extension check. |
+| Supply a session-scoped anchor | Refused (`7ea5c8d`). Previously coerced to whole-store and verified against the wrong scope. |
+| Invoke with `--anchor` and no value, or `--anchor=path`, or a stray `--help` | Exit 2/1/2 (`848982a`). Each previously produced a **silent unanchored pass at exit 0**. |
 | Set `seenCount` arbitrarily | **NOT caught.** Outside the leaf by design, pinned as drill boundary `boundary-seen-count`, and served as an audit total by `stats()`. Documented limit, not a regression from this changeset. |
-| Renumber `seq` preserving order | **NOT caught.** Declined deliberately in `b1bcf73` with measured rationale. |
+| Renumber `seq` preserving order | **NOT caught.** Declined deliberately in `99c27e0` with measured rationale. |
 
 ## Coverage limits (stated honestly)
 
@@ -83,8 +83,8 @@ Threat model: an attacker with **write access to the sqlite file** (the repo's s
 ## Verdict
 
 **No HIGH-severity security finding in the changeset as it now stands.** Five real defects existed
-mid-range and are fixed within it (`fd362c6`, `e98b120`, `35355b0`); the diff should be read as a
-whole, not commit-by-commit — `f640e9a` alone would not pass this review.
+mid-range and are fixed within it (`848982a`, `9f50b65`, `7ea5c8d`); the diff should be read as a
+whole, not commit-by-commit — `99aa98a` alone would not pass this review.
 
 Confidence: **high** on the anchored path (executed end to end against a real re-sealed database),
 **medium** on the CLI surface (verified by hand, not locked by tests).
