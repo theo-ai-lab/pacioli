@@ -96,7 +96,7 @@ describe("ledger tamper drill", () => {
   it("publishes EVERY class it ran — a class missing from the report is coverage nobody can audit", () => {
     const md = renderDrillReport(report, "dataset/reference-ledger.db");
     for (const c of TAMPER_CLASSES) expect(md).toContain(`\`${c.id}\``);
-    expect(md).toContain("264/264"); // 33 in-model classes × 8 seeds, none inapplicable to this ledger
+    expect(md).toContain("272/272"); // 34 in-model classes × 8 seeds, none inapplicable to this ledger
     expect(md).toMatch(/Negative control.*VERIFIES/);
   });
 

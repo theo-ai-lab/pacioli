@@ -8,7 +8,9 @@
  *
  * Zero new dependencies — node:sqlite (built in) plus the engine's hash primitives.
  */
-import { GENESIS, WHOLE_STORE, leafHash, entryHashFor, scopeRoot, type LedgerFacts } from "./ledger-chain";
+// MAX_POSITION is the WRITER's constant too (the store refuses to allocate past it) — one definition,
+// so the reader and the writer cannot drift into disagreeing about where the edge is.
+import { GENESIS, WHOLE_STORE, MAX_POSITION, leafHash, entryHashFor, scopeRoot, type LedgerFacts } from "./ledger-chain";
 
 export type FaultKind =
   | "unreadable" // the file isn't a readable receipt store
@@ -127,10 +129,6 @@ function decodeRow(o: Record<string, unknown>): Row {
   };
 }
 
-/** The widest position that survives the trip through a JS number. Past it, `seq` is unreadable —
- *  and the store cannot append past it either: `MAX(seq) + 1` is read the same way. */
-const MAX_POSITION = Number.MAX_SAFE_INTEGER;
-
 /**
  * Diagnose a row read that failed before any row could be decoded. The only known cause is a `seq`
  * outside the safe-integer range, so look for exactly that — as TEXT, so the diagnosis itself cannot
@@ -164,7 +162,8 @@ function unreadablePositions(db: RawDb, cause: Error): LedgerFault {
     detail:
       `seq ${String(first.seqText)} (${String(first.receiptId)}): outside the range a position can be read in — ` +
       `${offenders.length} row(s) are. The ledger cannot be walked at all, and the store cannot append to it either ` +
-      `(its next position is read the same way), so every receipt in it is unattested until they are restored.`,
+      `(its allocator refuses to hand out a position it could not read back), so every receipt in it is ` +
+      `unattested until they are restored.`,
   };
 }
 

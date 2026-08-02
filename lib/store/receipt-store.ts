@@ -10,7 +10,7 @@
  * root, so an edit, delete, reorder or truncation made straight against the sqlite file is detectable
  * — see lib/store/ledger-chain.ts and `npm run verify:ledger -- <db>`.
  */
-import { GENESIS, WHOLE_STORE, leafHash, entryHashFor, scopeRoot, shouldReseal } from "./ledger-chain";
+import { GENESIS, WHOLE_STORE, leafHash, entryHashFor, scopeRoot, shouldReseal, nextPosition } from "./ledger-chain";
 
 export interface StoredReceipt {
   receiptId: string;
@@ -276,7 +276,17 @@ export async function tryCreateSqliteStore(path: string, opts: { cap?: number } 
       const session = scope ? readScope(scope) : null;
       const leaf = await leafHash(r);
       const entry = await entryHashFor(whole.head, leaf);
-      const seq = Number((db.prepare(`SELECT COALESCE(MAX(seq), 0) AS m FROM receipts`).get() as { m: number }).m) + 1;
+      // THE NEXT POSITION, ALLOCATED FAIL-CLOSED. Read as TEXT — the same move the verifier makes —
+      // because `MAX(seq)` is an int64 and node:sqlite throws a bare RangeError rather than narrowing
+      // one wider than a double, before this code could say which ledger or what to do about it.
+      // nextPosition() then refuses to hand back a position this store could not read again: an append
+      // that writes one is an append that leaves the whole file unverifiable while telling the caller
+      // the receipt was stored. It throws a named LedgerPositionError, which propagates out of save()
+      // (nothing here catches it, so nothing is written) and reaches /api/reconcile as `stored: false`.
+      const currentMax = String(
+        (db.prepare(`SELECT COALESCE(CAST(MAX(seq) AS TEXT), '0') AS m FROM receipts`).get() as { m: unknown }).m,
+      );
+      const seq = nextPosition(currentMax);
 
       // Roots are re-sealed only when the scope has drifted far enough (see shouldReseal): the chain
       // covers every row on every write; the Merkle root is the inclusion-proof commitment.

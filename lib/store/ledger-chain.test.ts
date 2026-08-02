@@ -585,3 +585,141 @@ describe("seq — the walk's order, not a committed fact", () => {
     expect(after.state).toEqual(control.state);
   });
 });
+
+/**
+ * THE NEXT POSITION IS ALLOCATED, AND AN ALLOCATOR THAT CANNOT ALLOCATE MUST SAY SO.
+ *
+ * `seq` is a sqlite INTEGER (int64); the store reads `MAX(seq)` and the verifier reads every row's
+ * position into a JS number, and node:sqlite refuses to narrow anything wider than a double. So the
+ * store has an edge, and the only question is what it does AT the edge. Measured on copies of the
+ * committed reference ledger before any of this existed, it did three different things, none of them
+ * a refusal: with the highest position already past the range it rejected with a bare
+ * `RangeError: Value is too large to be represented as a JavaScript number` that named no ledger and
+ * no remedy; with the highest position exactly at `Number.MAX_SAFE_INTEGER` it RESOLVED — writing a
+ * position it could never read again, which made the whole file stop verifying, on the very row it
+ * had just written, while the caller was told the receipt was stored; and with a position column
+ * holding text it wrote `seq = NULL` (`Number('zzz') + 1` is NaN) and resolved too.
+ *
+ * A store that reports a save it has poisoned the ledger with is worse than a store that refuses.
+ * These pin the refusal: named, located, and nothing written.
+ */
+describe("the next position — allocated fail-closed, or refused by name", () => {
+  /** Force the ledger's HIGHEST position to an exact value, as a SQL literal: a position wider than a
+   *  double cannot be BOUND as a JS number, which is the entire subject of this block. */
+  const setMaxPosition = async (path: string, literal: string): Promise<void> => {
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET seq = ${literal} WHERE seq = (SELECT MAX(seq) FROM receipts)`);
+    db.close();
+  };
+
+  /** Every stored position, read as TEXT — the only lossless way to look at an int64 from here. */
+  const positions = async (path: string): Promise<string[]> => {
+    const db = await rawOpen(path);
+    const rows = db.prepare(`SELECT receiptId, CAST(seq AS TEXT) AS s FROM receipts ORDER BY receiptId`).all() as Array<{
+      receiptId: unknown;
+      s: unknown;
+    }>;
+    db.close();
+    return rows.map((r) => `${String(r.receiptId)}=${r.s === null ? "NULL" : String(r.s)}`);
+  };
+
+  /** Save through the REAL store API and hand back whatever it refused with (or null if it accepted). */
+  const saveAndCatch = async (path: string, id: string): Promise<Error | null> => {
+    const store = await tryCreateSqliteStore(path);
+    if (!store) throw new Error("node:sqlite unavailable");
+    return store.save(mk(id, true, [], undefined, 9000)).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+  };
+
+  it("REFUSES a position it could never read back, instead of writing one and reporting success", async () => {
+    // The ledger is at the last position a JS number can hold. It verifies; every receipt in it reads.
+    // The next append must not be the thing that ends that.
+    const path = freshCopy();
+    await setMaxPosition(path, "9007199254740991"); // Number.MAX_SAFE_INTEGER
+    expect((await verifyLedger(path)).ok).toBe(true);
+    const before = await positions(path);
+
+    const err = await saveAndCatch(path, "sha256:eee");
+
+    expect(err?.name).toBe("LedgerPositionError");
+    expect((err as { reason?: string } | null)?.reason).toBe("exhausted");
+    expect(err?.message).toContain("9007199254740992"); // the position it refused to allocate
+    expect(err?.message).toMatch(/verify:ledger/); // …and what the operator does next
+    expect(await positions(path)).toEqual(before); // nothing was written
+    expect((await verifyLedger(path)).ok).toBe(true); // and the ledger it refused to extend still verifies
+  });
+
+  it("NAMES the ledger's own unreadable positions rather than dying with a bare RangeError", async () => {
+    const path = freshCopy();
+    const db = await rawOpen(path);
+    db.exec(`UPDATE receipts SET seq = seq + 9007199254740992`); // every position past 2^53, order kept
+    db.close();
+    const before = await positions(path);
+
+    const err = await saveAndCatch(path, "sha256:eee");
+
+    expect(err?.name).toBe("LedgerPositionError");
+    expect((err as { reason?: string } | null)?.reason).toBe("unreadable-max");
+    expect(err?.message).toContain("9007199254740996"); // the highest position actually in the file
+    expect(await positions(path)).toEqual(before);
+  });
+
+  it("REFUSES when the highest position is not a position at all — rather than appending seq = NULL", async () => {
+    // sqlite columns are dynamically typed, so `seq` can hold text, and text sorts above every integer:
+    // `MAX(seq)` is 'zzz', `Number('zzz') + 1` is NaN, and a bound NaN lands in the file as NULL — a
+    // row outside the order the whole chain is walked in, written by the store, reported as stored.
+    const path = freshCopy();
+    await setMaxPosition(path, `'zzz'`);
+    const before = await positions(path);
+
+    const err = await saveAndCatch(path, "sha256:eee");
+
+    expect(err?.name).toBe("LedgerPositionError");
+    expect((err as { reason?: string } | null)?.reason).toBe("malformed-max");
+    expect(err?.message).toContain('"zzz"');
+    expect(await positions(path)).toEqual(before); // no NULL-positioned row appeared
+  });
+
+  it("PROPERTY: whatever the highest position is, an append either lands readable or is refused by name", async () => {
+    // The behaviour is a SPACE, not three examples: the interesting maxima are comfortably-safe
+    // positions, the exact edge of the double-safe range, positions already past it, and a column
+    // holding something that is not a position. The invariant is the one an operator relies on —
+    //   the store never leaves the ledger less verifiable than it found it, and never resolves
+    //   unless it wrote a position it can read again.
+    // Seeded, so the space is fixed and any failure is reproducible from its seed.
+    const maxLiteral = (rng: () => number): string => {
+      const kind = Math.floor(rng() * 4);
+      if (kind === 0) return String(5 + Math.floor(rng() * 1_000_000)); // comfortably readable
+      if (kind === 1) return String(Number.MAX_SAFE_INTEGER - Math.floor(rng() * 3)); // at the edge
+      if (kind === 2) return `9007199254740${992 + Math.floor(rng() * 8)}`; // already past it
+      return `'${["zzz", "1.5", ""][Math.floor(rng() * 3)]}'`; // not a position at all
+    };
+
+    for (let seed = 1; seed <= 24; seed++) {
+      const literal = maxLiteral(mulberry32(seed));
+      const path = freshCopy();
+      await setMaxPosition(path, literal);
+      const before = { ok: (await verifyLedger(path)).ok, positions: await positions(path) };
+
+      const id = `sha256:probe${seed}`;
+      const err = await saveAndCatch(path, id);
+      const after = { ok: (await verifyLedger(path)).ok, positions: await positions(path) };
+
+      // Never degraded: a ledger that verified before the attempt still verifies after it.
+      expect({ seed, literal, ok: after.ok }).toEqual({ seed, literal, ok: before.ok });
+      if (err) {
+        expect({ seed, literal, name: err.name }).toEqual({ seed, literal, name: "LedgerPositionError" });
+        expect({ seed, literal, positions: after.positions }).toEqual({ seed, literal, positions: before.positions });
+      } else {
+        const stored = after.positions.find((p) => p.startsWith(`${id}=`))?.split("=")[1] ?? "";
+        expect({ seed, literal, readable: Number.isSafeInteger(Number(stored)) && stored !== "" }).toEqual({
+          seed,
+          literal,
+          readable: true,
+        });
+      }
+    }
+  }, 60_000);
+});

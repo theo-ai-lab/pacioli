@@ -118,7 +118,7 @@ to its position. So the durable store is a chain, not just a table
 | two rows colliding on one sequence number | `seq` is the walk's order, so it must BE an order — otherwise the chain is checked against a tie-break |
 | a row stored in a non-canonical encoding (text in `deltaUsd`, padded `findingTypes`, a verdict outside `{0,1}`) | the row→facts decode is injective, so "the leaf matches" still implies "the row is what was committed" |
 | a committed counter that isn't a number (`rootCount = -9`, `rootCount = 'x'`) | counters are validated *before* anything is inferred from them — a check that can't be run FAILS, it is never skipped |
-| a position pushed outside the safe-integer range (`seq += 2^53`) | the row read fails before a row exists to decode, so the failure is caught and **located** — a verifier that dies is not a verifier that reports |
+| a position pushed outside the safe-integer range (`seq += 2^53`) | the row read fails before a row exists to decode, so the failure is caught and **located** — a verifier that dies is not a verifier that reports; the store's allocator refuses to write into that range too, by name |
 
 Covered honestly means covered *exactly*: the leaf commits to `receiptId`, `receiptHash`,
 `balanced`, `findingTypes`, `agent`, `merchant`, `deltaUsd`, `createdAt` and `sessionKey` — and to
@@ -152,11 +152,32 @@ ever makes seq's absolute value load-bearing, those property tests go red and th
 rewritten instead of quietly going out of date.
 
 One place where "inert" stops: pushing a position past 2^53 while still preserving the order is a
-**denial of service, not a forgery**. `node:sqlite` will not narrow an integer that wide into a JS
-number, so the store's next append rejects (the caller is told — `/api/reconcile` reports
-`stored: false`) and the verifier now reports a *located* `malformed-row` naming the row and the
-position, instead of dying with a bare `RangeError` that names nothing. That is the honest split:
-integrity holds, availability is what an attacker with write access can take.
+**denial of service, not a forgery**. `seq` is an int64 in the file but a JS number everywhere it is
+read, and `node:sqlite` will not narrow an integer that wide — so both halves have to fail loudly,
+and both now do.
+
+*Reading.* The verifier reports a *located* `malformed-row` naming the receipt and the position
+(the offenders are re-read as TEXT, which never crosses the number boundary), instead of dying with
+a bare `RangeError` that names nothing — a verifier that dies is not a verifier that reports. Pinned
+by the `malformed-seq-past-readable-range` drill class.
+
+*Appending.* The store allocates the next position through
+[`nextPosition()`](../lib/store/ledger-chain.ts), which reads `MAX(seq)` as TEXT and **refuses by
+name** — a `LedgerPositionError` carrying a typed `reason` (`malformed-max`, `unreadable-max`,
+`exhausted`), the ledger's current highest position, and the remedy — rather than failing by
+arithmetic accident. Nothing is written, `save()` rejects, and `/api/reconcile` answers
+`stored: false` with that line in the log. Every position it *does* return is one the store can read
+again: never a position past the readable range (`MAX(seq)` already at `Number.MAX_SAFE_INTEGER`
+used to allocate 2^53, write it, and report success — leaving a row the file could no longer verify),
+and never `NaN`, which binds into sqlite as `NULL` and would put a row outside the order the chain is
+walked in. Refused, the receipt is simply not stored: the ledger it declined to extend still verifies,
+and every receipt already in it still reads. Pinned on the real store API — three cases and a seeded
+property over 24 generated maxima — in [`ledger-chain.test.ts`](../lib/store/ledger-chain.test.ts),
+and end to end at the HTTP surface in
+[`route.persistence.test.ts`](../app/api/reconcile/route.persistence.test.ts).
+
+That is the honest split: integrity holds, availability is what an attacker with write access can
+take — and what they take is loud at both ends.
 
 Three further limits, stated rather than buried: receipts written *before* the chain
 existed carry no commitment and the verifier refuses to certify them instead of passing them
@@ -200,7 +221,7 @@ must still verify), because a verifier that rejects everything proves nothing.
 npm run drill:tamper                      # exit 0 all caught · exit 1 naming the escape
 ```
 
-**33 in-model classes · 264 cases · 264 caught · 0 escapes**, re-run on every push and published as
+**34 in-model classes · 272 cases · 272 caught · 0 escapes**, re-run on every push and published as
 [`docs/TAMPER-DRILL.md`](TAMPER-DRILL.md), which CI regenerates and holds to a byte-for-byte diff.
 Adding a class to the registry in [`lib/store/tamper-drill.ts`](../lib/store/tamper-drill.ts) extends
 the invariant automatically.

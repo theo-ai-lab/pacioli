@@ -11,6 +11,42 @@ the changes landed on `main`.
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-08-02) **The ledger's next-position allocator now fails closed and by
+  name.** `seq` is an int64 in the sqlite file and a JS number everywhere it is
+  read, so the store has an edge at `Number.MAX_SAFE_INTEGER` — and, measured on
+  copies of the committed reference ledger, it did three different things there,
+  none of them a refusal. With the highest position already past the range it
+  threw a bare `RangeError: Value is too large to be represented as a JavaScript
+  number` naming no ledger and no remedy. With the highest position *exactly* at
+  `Number.MAX_SAFE_INTEGER` it **resolved**: it allocated 2^53, wrote it, and
+  reported the receipt stored — after which the whole file stopped verifying, on
+  the very row it had just written (`malformed-row … outside the range a
+  position can be read in`), while `/api/reconcile` had already answered
+  `stored: true`. And with text in the position column (`MAX(seq)` is `'zzz'`,
+  `Number('zzz') + 1` is `NaN`, a bound `NaN` lands as `NULL`) it wrote a row
+  outside the order the chain is walked in, and reported that stored too. A
+  store that reports a save it has poisoned its own ledger with is worse than a
+  store that refuses. The allocator now reads `MAX(seq)` as TEXT — the same move
+  the verifier makes, so the read itself cannot fail before anything can be said
+  about it — and `nextPosition()` refuses with a named, located
+  `LedgerPositionError` carrying a typed `reason` (`malformed-max`,
+  `unreadable-max`, `exhausted`), the ledger's current highest position, and the
+  operator's next step. Nothing is written, `save()` rejects, `/api/reconcile`
+  answers `stored: false` and logs the line. Every position the allocator does
+  return is one the store can read again. Pinned on the real store API by three
+  cases and a seeded property over 24 generated maxima (the invariant: *the store
+  never leaves the ledger less verifiable than it found it, and never resolves
+  unless it wrote a position it can read again*), end to end at the HTTP surface
+  in `route.persistence.test.ts`, and against the file itself by a new
+  `malformed-seq-past-readable-range` drill class — in-model coverage goes from
+  33 classes / 264 cases to **34 classes · 272 cases · 272 caught · 0 escapes**.
+  `MAX_POSITION` now has one definition, shared by the writer and the verifier.
+  No schema change: `seq` stays an INTEGER, the leaf facts are untouched, and
+  `dataset/reference-ledger.db` verifies byte-identically (sha256
+  `896575ff…345f3`, unchanged).
+
 ### Added
 
 - (2026-08-01) The two informational residuals of the ledger chain are now

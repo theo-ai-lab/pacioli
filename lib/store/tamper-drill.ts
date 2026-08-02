@@ -601,6 +601,21 @@ export const TAMPER_CLASSES: readonly TamperClass[] = [
       return `seq of ${r.receiptId} → NULL`;
     },
   },
+  {
+    id: "malformed-seq-past-readable-range",
+    model: "in-model",
+    what: "push a position past 2^53, where READING it is what fails — a verifier that dies is not a verifier that reports",
+    async apply(db, ctx, rng) {
+      // `seq` is an int64 in the file and a double everywhere it is read, so this one breaks the row
+      // read itself: node:sqlite refuses to narrow it and throws before any row exists to inspect.
+      // The verifier must still come back with a LOCATED fault, and the store's allocator must refuse
+      // to walk into the same wall (pinned separately, on the store API, in ledger-chain.test.ts).
+      // 2^53 is written as a SQL literal because it cannot be BOUND as a JS number.
+      const r = pick(ctx.rows, rng);
+      db.prepare(`UPDATE receipts SET seq = seq + 9007199254740992 WHERE receiptId = ?`).run(r.receiptId);
+      return `seq of ${r.receiptId} ${r.seq} → ${r.seq} + 2^53, past the range a position can be read in`;
+    },
+  },
   // ── PINNED BOUNDARIES — these must still VERIFY, and the docs must keep saying why ───────────
   {
     id: "boundary-seen-count",
