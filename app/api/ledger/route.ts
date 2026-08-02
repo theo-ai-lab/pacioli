@@ -38,9 +38,33 @@ export async function GET(req: Request): Promise<Response> {
   const sessionKey = rawSession || null;
   const limit = parseLimit(url.searchParams.get("limit"));
 
+  // The un-scoped view returns EVERY user's receipts. The product surface promises
+  // "scoped to this browser -- nothing is shown that you didn't enter", so serving
+  // that view to an unauthenticated caller would contradict the claim. When no key
+  // is configured there is nobody who could be authorized for it, so it fails
+  // closed rather than defaulting to the widest possible disclosure.
+  if (!sessionKey && !required) {
+    return Response.json(
+      {
+        error:
+          "the global ledger is operator-only: set PACIOLI_API_KEY and send x-api-key, " +
+          "or request a single session with ?session=<key>",
+      },
+      { status: 403 },
+    );
+  }
+
   const store = await getStore();
-  const receipts: StoredReceipt[] = sessionKey ? store.listBySession(sessionKey, limit) : store.list(limit);
+  const rows: StoredReceipt[] = sessionKey ? store.listBySession(sessionKey, limit) : store.list(limit);
   const stats = sessionKey ? store.statsBySession(sessionKey) : store.stats();
+  // sessionKey is the correlation handle for one browser's entire history. A
+  // reader who obtains it can re-query that ledger directly, so it never leaves
+  // the server -- not even in the scoped view, where the caller already knows it.
+  const receipts = rows.map((row) => {
+    const rest: Omit<StoredReceipt, "sessionKey"> & { sessionKey?: string } = { ...row };
+    delete rest.sessionKey;
+    return rest;
+  });
 
   return Response.json(
     {

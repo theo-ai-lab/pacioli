@@ -60,14 +60,44 @@ describe("GET /api/ledger — per-user/session ledger", () => {
     expect(b.total).toBe(2);
     expect(b.flagged).toBe(1);
     expect(b.receipts.map((r) => r.receiptId)).toEqual(["a2", "a1"]); // newest first
-    expect(b.receipts.every((r) => r.sessionKey === "user-alice")).toBe(true);
+    // Bob's receipt and the global-only one are absent. Asserted on ids rather
+    // than on a returned sessionKey, because the response no longer carries one.
+    expect(b.receipts.map((r) => r.receiptId)).not.toContain("b1");
+    expect(b.receipts.map((r) => r.receiptId)).not.toContain("g1");
   });
 
-  it("returns the global ledger when no session is given (additive — un-scoped still works)", async () => {
-    const b = (await get()).json() as Promise<LedgerBody>;
-    const body = await b;
+  it("REFUSES the un-scoped global ledger when no API key is configured", async () => {
+    // The un-scoped view returns every user's receipts. Serving that to an
+    // unauthenticated caller contradicts "scoped to this browser -- nothing is
+    // shown that you didn't enter", which the product surface promises. With no
+    // key configured there is no one to authorize it, so it fails closed.
+    const res = await get();
+    expect(res.status).toBe(403);
+    const b = (await res.json()) as { error: string };
+    expect(b.error).toMatch(/global/i);
+  });
+
+  it("serves the global ledger to an operator holding the configured key", async () => {
+    process.env.PACIOLI_API_KEY = "k";
+    const res = await get("", { "x-api-key": "k" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as LedgerBody;
     expect(body.scope).toBe("global");
     expect(body.total).toBe(4);
+  });
+
+  it("never returns a session key to anyone, in either scope", async () => {
+    // sessionKey is the correlation handle for one browser's whole history.
+    // Returning it lets any reader enumerate and re-query another user's ledger,
+    // so it must not leave the server in either scope.
+    const scoped = (await (await get("?session=user-alice")).json()) as LedgerBody;
+    expect(scoped.receipts.length).toBe(2);
+    expect(scoped.receipts.some((r) => r.sessionKey !== undefined)).toBe(false);
+
+    process.env.PACIOLI_API_KEY = "k";
+    const global_ = (await (await get("", { "x-api-key": "k" })).json()) as LedgerBody;
+    expect(global_.receipts.length).toBe(4);
+    expect(global_.receipts.some((r) => r.sessionKey !== undefined)).toBe(false);
   });
 
   it("an unknown session is empty, not an error", async () => {
