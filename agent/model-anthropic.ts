@@ -20,7 +20,9 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { StewardAction, StewardContext, StewardModel } from "./loop";
 
-/** Default per the project's Claude policy. Override via opts.model. */
+/** The default tier: the Steward's decisions are few, high-stakes, and structured, so the
+ *  frontier model is worth it here (unlike the judge, which runs on a cheap tier at volume).
+ *  Override via opts.model. */
 export const STEWARD_MODEL = "claude-opus-4-8";
 
 /** True iff a key is present. With no key, callers must use scriptedStewardModel(). */

@@ -47,6 +47,38 @@ the changes landed on `main`.
   `dataset/reference-ledger.db` verifies byte-identically (sha256
   `896575ff…345f3`, unchanged).
 
+- (2026-08-01) The ledger verifier died instead of reporting when a row's `seq`
+  sat outside the safe-integer range. `seq` is a sqlite `INTEGER` (int64) read
+  into a JS number, and `node:sqlite` refuses to narrow a value wider than a
+  double — so the throw happened inside the row read, *before* any row existed
+  for the decode to inspect, and `verifyLedger()` threw rather than returning a
+  report. The CLI still exited non-zero (it catches at the top), but it printed
+  a bare `Value is too large to be represented as a JavaScript number` naming no
+  row, and any programmatic caller — the tamper drill runs its whole registry
+  through this function — would abort mid-run. The read is now caught and the
+  offending positions re-read as TEXT, so the fault is a **located**
+  `malformed-row` naming the receipt and the position. Reachable by anyone with
+  write access to the file (`UPDATE receipts SET seq = seq + 2^53`); it is a
+  denial of service on future appends, not a forgery, and both halves now fail
+  loudly rather than silently.
+
+- (2026-08-01) Seven escaping tamper classes — four distinct root causes — all
+  found by the tamper drill on its first run (51 escapes in 264 in-model cases) and all
+  instances of one API failure class: *a verification function that succeeds on
+  malformed input*. The verifier now fails closed on: a **duplicate or NULL `seq`** (the walk orders
+  by `seq`, so a tie was resolved by rowid and every link still held — while
+  `seq` is also what bounded retention deletes by, letting an attacker pick the
+  next prune's victim); a **negative or non-numeric `rootCount`**, which retired
+  a scope's Merkle commitment entirely because `NaN > n` is false and
+  `slice(0, -9)` returns `[]`; a **session scope committed to zero receipts**, a
+  claim nothing can contradict and one the store can never produce; and a
+  **non-canonical row encoding** — text in `deltaUsd` (`Number("n/a")` is NaN
+  and `canonicalJSON(NaN)` is `"null"`), padded `findingTypes`, or a verdict
+  outside `{0,1}` — which made the row→facts decode lossy, so two different
+  stored rows could share one leaf and "the leaf matches" stopped implying "the
+  row is what was committed".
+- (2026-06-12) Lockfile regenerated so `npm ci` validates across npm versions.
+
 ### Added
 
 - (2026-08-01) The two informational residuals of the ledger chain are now
@@ -191,37 +223,3 @@ the changes landed on `main`.
   cross-origin batch caller example generalized in comments.
 - (2026-07-06) Deploy-parity workflow comments describe the probe list precisely
   (README-named routes plus the API routes the demo pages call).
-
-### Fixed
-
-- (2026-08-01) The ledger verifier died instead of reporting when a row's `seq`
-  sat outside the safe-integer range. `seq` is a sqlite `INTEGER` (int64) read
-  into a JS number, and `node:sqlite` refuses to narrow a value wider than a
-  double — so the throw happened inside the row read, *before* any row existed
-  for the decode to inspect, and `verifyLedger()` threw rather than returning a
-  report. The CLI still exited non-zero (it catches at the top), but it printed
-  a bare `Value is too large to be represented as a JavaScript number` naming no
-  row, and any programmatic caller — the tamper drill runs its whole registry
-  through this function — would abort mid-run. The read is now caught and the
-  offending positions re-read as TEXT, so the fault is a **located**
-  `malformed-row` naming the receipt and the position. Reachable by anyone with
-  write access to the file (`UPDATE receipts SET seq = seq + 2^53`); it is a
-  denial of service on future appends, not a forgery, and both halves now fail
-  loudly rather than silently.
-
-- (2026-08-01) Seven escaping tamper classes — four distinct root causes — all
-  found by the tamper drill on its first run (51 escapes in 264 in-model cases) and all
-  instances of one API failure class: *a verification function that succeeds on
-  malformed input*. The verifier now fails closed on: a **duplicate or NULL `seq`** (the walk orders
-  by `seq`, so a tie was resolved by rowid and every link still held — while
-  `seq` is also what bounded retention deletes by, letting an attacker pick the
-  next prune's victim); a **negative or non-numeric `rootCount`**, which retired
-  a scope's Merkle commitment entirely because `NaN > n` is false and
-  `slice(0, -9)` returns `[]`; a **session scope committed to zero receipts**, a
-  claim nothing can contradict and one the store can never produce; and a
-  **non-canonical row encoding** — text in `deltaUsd` (`Number("n/a")` is NaN
-  and `canonicalJSON(NaN)` is `"null"`), padded `findingTypes`, or a verdict
-  outside `{0,1}` — which made the row→facts decode lossy, so two different
-  stored rows could share one leaf and "the leaf matches" stopped implying "the
-  row is what was committed".
-- (2026-06-12) Lockfile regenerated so `npm ci` validates across npm versions.

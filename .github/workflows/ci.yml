@@ -23,7 +23,7 @@ jobs:
       # cannot verify, which is the entire point.)
       - run: npm run verify:ledger -- dataset/reference-ledger.db
       # …and the adversarial half of the same claim: a scripted attacker mutates a COPY of that store
-      # 33 ways from a seeded generator (edit, delete, reorder, truncate, forge, re-insert, splice,
+      # 34 ways from a seeded generator (edit, delete, reorder, truncate, forge, re-insert, splice,
       # malformed encodings, rewritten commitments) and the verifier must catch 100% of them. An
       # ESCAPE — any tamper the verifier passes — exits non-zero, so a hole in the tamper-evidence
       # story breaks the build instead of waiting to be noticed.

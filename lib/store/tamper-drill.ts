@@ -557,7 +557,7 @@ export const TAMPER_CLASSES: readonly TamperClass[] = [
       return `whole-store unchained counter ${whole.unchained} → ${to}`;
     },
   },
-  // ── MALFORMED ENCODINGS (the misuse-resistance probe: a check SKIPPED is worse than a check FAILED) ─
+  // ── MALFORMED ENCODINGS (the misuse-resistance probe: a check SKIPPED is worse than one FAILED) ─
   {
     id: "malformed-delta-nonnumeric",
     model: "in-model",
@@ -881,6 +881,16 @@ export function renderDrillReport(r: DrillReport, target: string): string {
     `Catching a full re-seal from the file alone is impossible by construction — the adversary rewrites the ` +
       `evidence and the record of the evidence in one pass. It needs an off-box anchor (a published root, or a ` +
       `signature over it), which is why the roots are exposed rather than kept internal.`,
+  );
+  L.push(``);
+  L.push(
+    `**The anchor exists now, so the two re-seal classes stay boundaries only for the file-alone walk.** ` +
+      `\`npm run anchor:ledger -- <db> --out anchor.json\` commits to the whole store's head, root and count; ` +
+      `\`npm run verify:ledger -- <db> --anchor anchor.json\` catches both with a located \`anchor-mismatch\`. ` +
+      `They remain listed here as boundaries because that is what they are *for the unanchored walk this drill ` +
+      `runs*, and moving them into the in-model set would claim a detection the drill does not itself perform. ` +
+      `The anchored path is proven separately in ` +
+      `[\`ledger-anchor.test.ts\`](../lib/store/ledger-anchor.test.ts).`,
   );
   L.push(``);
   return L.join("\n");

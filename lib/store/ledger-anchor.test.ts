@@ -140,15 +140,29 @@ describe("the report says whether it was anchored at all", () => {
 // ── the variant that actually pins head and root ──────────────────────────────
 //
 // Every mismatch test above differs in COUNT, so the count comparison alone catches
-// all of them — deleting the root and head comparisons leaves this file green. An
-// adversarial review proved exactly that by deleting both lines and watching 54/54
-// still pass. The commit that added them claimed to be mutation-verified; the
-// mutation removed the whole `if (diffs.length > 0)` block, which the count
-// comparison covered, so the two lines the feature exists for were never pinned.
+// all of them — deleting the root and head comparisons leaves this file green.
+// Measured, not assumed: with both lines removed the suite still passed 54/54. An
+// earlier attempt to pin them deleted the whole `if (diffs.length > 0)` block, which
+// the count comparison covers on its own, so the two lines the feature exists for
+// were never actually pinned.
 //
 // `boundary-full-reseal-rewrite` is the variant that preserves the receipt count and
 // moves only the hashes. It is named in this file's own header as a boundary being
 // closed, and until now it was never implemented here.
+
+/** A `receipts` row exactly as sqlite hands it back: the verdict is an INTEGER and the finding
+ *  list a comma-joined string, so this is the ENCODED shape, not the decoded facts. */
+interface RawReceiptRow {
+  receiptId: string;
+  receiptHash: string;
+  balanced: number;
+  findingTypes: string | null;
+  agent: string;
+  merchant: string;
+  deltaUsd: number | null;
+  createdAt: number;
+  sessionKey: string | null;
+}
 
 /** The attacker: edit a receipt, then re-derive every leaf, link, head and root. */
 async function editAndReseal(path: string): Promise<void> {
@@ -160,7 +174,7 @@ async function editAndReseal(path: string): Promise<void> {
     };
   };
   const db = new DatabaseSync(path);
-  const rows = db.prepare(`SELECT * FROM receipts ORDER BY seq ASC`).all() as Record<string, any>[];
+  const rows = db.prepare(`SELECT * FROM receipts ORDER BY seq ASC`).all() as RawReceiptRow[];
   // Flip one receipt's verdict — the tamper a forger actually wants.
   // rows[0] is mk(1): unbalanced, one finding, a non-null delta. Editing a row that
   // already had the target values would be a no-op re-seal and prove nothing.

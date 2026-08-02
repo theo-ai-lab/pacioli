@@ -1,9 +1,13 @@
-# Differential security review — the off-box anchor changeset
+# Security review — the off-box anchor changeset
 
-**Branch:** `elite/persisted-chain-and-verifier` · **Range:** `f640e9a^..35355b0` (5 commits)
-**Date:** 2026-08-02 · **Strategy:** DEEP (SMALL codebase — 11 files changed, full dependency read)
+**Range:** `f640e9a^..35355b0` (5 commits) · **Date:** 2026-08-02
+**Scope:** 11 files changed; small enough to read every dependency rather than sample.
 
-## Phase 0 — Triage
+The anchor decides whether a ledger verifies, so the changeset that introduced it was read as
+security-relevant code: what it can pass, what it can fail, and what it silently lets through.
+[`ADR-001`](ADR-001-off-box-anchor.md) records the design decision; this records the review of it.
+
+## Triage
 
 | File | Δ | Risk | Why |
 |---|---|---|---|
@@ -17,7 +21,7 @@
 
 **No new dependencies.** Confirmed: the diff adds one npm *script*, zero packages.
 
-## Phase 1 — Was any security check removed?
+## Was any security check removed?
 
 Every `-` line in `verify-ledger.ts` is a signature or return-shape change, re-added with the
 `anchored` field. No validation, no fault kind, and no comparison was deleted.
@@ -25,18 +29,19 @@ Every `-` line in `verify-ledger.ts` is a signature or return-shape change, re-a
 `git blame` on the surrounding chain-walk logic shows it untouched by this range — the walk that
 existed before the anchor still runs identically, and the anchor comparison is strictly additive.
 
-## Phase 2 — Test coverage
+## Test coverage
 
 Adequate, but **only after a defect**. The original tests could not fail for the root or head
 comparison: every mismatch case differed in *count*, so the count comparison caught all of them.
-Deleting both the root and head lines left the suite green at 54/54 — proven by an adversarial
-reviewer, not assumed. `boundary-full-reseal-rewrite` (the count-preserving variant) now pins them;
-deleting either line fails 2 tests.
+Deleting both the root and head lines left the suite green at 54/54 — measured by removing them,
+not assumed. `boundary-full-reseal-rewrite` (the count-preserving variant) now pins them; deleting
+either line fails 2 tests.
 
-**Elevated risk noted per the skill's rule:** a changeset whose tests could not detect the removal
-of its own central comparison is rated as if untested until that is fixed. It is fixed here.
+**Elevated risk while that held:** a changeset whose tests cannot detect the removal of its own
+central comparison is effectively untested for that comparison, however green the suite looks. It
+is fixed here, and the standard is worth keeping — a test that cannot fail is not evidence.
 
-## Phase 3 — Blast radius
+## Blast radius
 
 8 files reference `verifyLedger` / `LedgerReport`, all within `lib/store` plus
 `app/api/reconcile/route.persistence.test.ts`. **No production consumer constructs a
@@ -46,7 +51,7 @@ by 272/272 drill cases and 468 tests green.
 
 Low blast radius. The required-field change is source-compatible for every in-repo consumer.
 
-## Phase 5 — Adversarial
+## Adversarial pass
 
 Threat model: an attacker with **write access to the sqlite file** (the repo's stated model).
 
@@ -69,7 +74,7 @@ Threat model: an attacker with **write access to the sqlite file** (the repo's s
 - `seenCount` and `seq` remain outside both the leaf and the anchor. Both are documented boundaries;
   neither is closed by this changeset and neither is claimed to be.
 - No CLI-level automated tests exist for the exit codes. The three fail-closed paths were verified
-  by hand this session (2 / 1 / 2) but are not locked by CI, so a regression would be silent.
+  by hand (2 / 1 / 2) but are not locked by CI, so a regression would be silent.
   **Highest-value follow-up.**
 - Concurrency: `verify-ledger` reads rows, `chain_state` and the uncommitted count in three separate
   statements with no snapshot. A concurrent append between them yields a spurious `count-mismatch`.
