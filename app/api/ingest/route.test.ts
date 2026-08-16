@@ -147,6 +147,20 @@ describe("POST /api/ingest — forwarded-confirmation ingestion into the per-use
     expect(h.store!.stats().total).toBe(0);
   });
 
+  it("reports whether the receipt actually reached the ledger, both ways", async () => {
+    // Ingestion's whole promise is "forward it and it's in your books". A 200 for a receipt that was
+    // never written would make that promise unfalsifiable from the caller's side.
+    const ok = await post(cleanMatch, { "x-pacioli-session": "user-alice" });
+    expect(((await ok.json()) as { stored: boolean }).stored).toBe(true);
+
+    h.store = { ...createMemoryStore(), save: async () => { throw new Error("disk full"); } };
+    const res = await post(cleanMatch, { "x-pacioli-session": "user-alice" });
+    const body = (await res.json()) as { receiptId: string; stored: boolean };
+    expect(res.status).toBe(200);
+    expect(body.receiptId).toMatch(/^sha256:/);
+    expect(body.stored).toBe(false);
+  });
+
   it("honors PACIOLI_API_KEY like the rest of the API surface", async () => {
     process.env.PACIOLI_API_KEY = "k";
     expect((await post(cleanMatch)).status).toBe(401);

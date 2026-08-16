@@ -16,6 +16,9 @@ export default defineConfig({
       "app/**/*.test.ts",
       "agent/**/*.test.ts",
       "scripts/**/*.test.ts",
+      // The deploy-parity probe is deliberately zero-dep plain-node .mjs (so the parity workflow can
+      // run it straight after a checkout, with no install); its test matches.
+      "scripts/**/*.test.mjs",
       "packages/*/src/**/*.test.ts",
       // The capture kit is deliberately zero-dep plain-node .mjs; its tests match.
       "dataset/**/*.test.mjs",

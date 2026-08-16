@@ -9,7 +9,18 @@ subscribed — against what the **evidence** shows, and prints a receipt when th
 
 ![The Pacioli demo: an agent claim and a confirmation reconciled into a receipt](docs/hero.png)
 
-> Spend trackers show you what was charged. Pacioli proves whether your agent told you the truth.
+> Spend trackers show you what was charged. Pacioli reconciles it against what you
+> **authorized** — deterministically, with a source citation on every finding — and
+> abstains out loud on the calls a rule cannot make.
+
+Read that second clause literally. The deterministic floor decides three conditions
+(overspend, scope creep, unauthorized recurrence) and **abstains** on whether an
+agent's prose was truthful, because a rule cannot decide that. On documented public
+incidents — which are overwhelmingly that fourth class — the floor alone classifies
+**2 of 17** correctly. That number is published in
+[`eval/RESULTS.md`](eval/RESULTS.md) rather than buried, and it is why the fuzzy
+residual routes to a gated, explicitly-marked judge instead of being absorbed into
+the headline.
 
 **[Live demo → pacioliapp.vercel.app](https://pacioliapp.vercel.app)** — paste a claim + a confirmation, get the receipt.
 **[/methods](https://pacioliapp.vercel.app/methods)** is the per-class eval · **[/ledger](https://pacioliapp.vercel.app/ledger)** is the live **record → reconcile → review** loop (forward a confirmation, watch it file into your own receipt ledger) plus real, source-cited failures as receipts · or run it locally in 30 seconds ([below](#run-it-locally)).
@@ -96,7 +107,9 @@ surface here; each surface's full contract — auth, error codes, judge semantic
 | **PR gate** | an agent's pull request — flagged (`OVERSPEND` on an oversized diff) before CI even finishes | `npm run reconcile:pr -- --gate < pr.json` |
 | **CI corpus audit** | a JSONL corpus of claims → SARIF (GitHub code scanning) or JUnit; malformed rows fail the gate, never skip | `npm run audit -- --gate corpus.jsonl` |
 | **Prometheus metrics** | the receipt store itself: totals, flagged counts, findings by type, store backend | `GET /api/metrics` |
-| **Deploy parity** | the deployment: the exact sha it serves, re-checked against `main` in CI on every push and weekly | `GET /api/version` |
+| **Ledger audit** | the durable store itself: walks its hash chain + per-scope Merkle roots and exits non-zero on the first altered, deleted, reordered or forged row | `npm run verify:ledger -- receipts.db` |
+| **Tamper drill** | the adversarial half of that: mutates a *copy* of a ledger 34 ways from a seeded generator and exits non-zero if the verifier passes any of them | `npm run drill:tamper -- receipts.db` |
+| **Deploy parity** | the deployment: the exact sha it serves, plus a known fixture posted at the live API and held to its VERDICT (flagged `OVERSPEND`, both citations) — a 200 proves nothing | `GET /api/version` · [`parity-probe.mjs`](scripts/parity-probe.mjs) |
 | **Framework adapter** | a LangChain/Agent-SDK run, receipted mid-loop with zero framework imports | [`lib/integrations/langchain.ts`](lib/integrations/langchain.ts) |
 
 Also deterministic, also engine-side: line-item sum checks ([`lib/engine/line-items.ts`](lib/engine/line-items.ts)),
@@ -195,12 +208,14 @@ account of each mechanism is in
 | The rules survive fuzzing | seeded property-based + metamorphic fuzzer at the rule boundaries — **100,000 cases, zero violations** | `npm run fuzz -- 100000` | [`fuzz.ts`](lib/engine/fuzz.ts) |
 | Findings diagnose, not just detect | ranked deterministic root-cause hypotheses on every finding (the receipt's `likely` line) | `npm test` | [`hypotheses.ts`](packages/engine/src/hypotheses.ts) |
 | Receipts are tamper-evident | SHA-256 content addressing + Merkle inclusion proofs — selective transparency, no SNARK | `npm test` | [`merkle.ts`](packages/engine/src/merkle.ts) · [`RELATED_WORK.md`](docs/RELATED_WORK.md) |
+| The stored ledger is tamper-evident | every persisted row is hash-chained to the one before it, every scope commits a count, head and Merkle root — an edit, delete, reorder, truncation or forged insert made straight against the sqlite file is located by sequence and receipt id. What that establishes is the file's **internal self-consistency**, not its authorship: an attacker who re-seals the whole ledger produces a file that verifies, and separating the two needs a prior commitment kept off the box — so `anchor:ledger` takes one and `verify:ledger --anchor` catches the re-seal, while an unanchored run says `SELF-CONSISTENT … NOT ANCHORED` rather than claiming more than it checked ([the limit, stated](docs/VERIFICATION.md#tamper-evident-auditable-receipts)) | `npm run verify:ledger -- dataset/reference-ledger.db` | [`ledger-chain.ts`](lib/store/ledger-chain.ts) · [`verify-ledger.ts`](lib/store/verify-ledger.ts) |
+| …and that claim is *drilled*, not asserted | a scripted adversary with write access to the sqlite file mutates a **copy** of that same store 34 ways from a seeded generator — **272/272 caught and located, 0 escapes**, against a negative control that must still verify. On its first run it escaped in 51 of 264 in-model cases across **seven** classes, tracing to **four** root causes — all instances of "a verifier that succeeds on malformed input", all now closed | `npm run drill:tamper` | [`tamper-drill.ts`](lib/store/tamper-drill.ts) · [`TAMPER-DRILL.md`](docs/TAMPER-DRILL.md) |
 | The fast path is falsifiable | deterministic tier ≡ judge-on-everything, measured over 48 labeled fixtures: ~40% resolved with zero escalation, 0 lossless violations, zero model spend | `npm run reconcile -- --equivalence` | [`cascade.ts`](lib/engine/cascade.ts) |
 | Distilled rules must survive a holdout | jury consensus proposes rules; out-of-sample gold labels promote or reject them (1 promoted, 1 rejected; deterministic coverage 39.6% → 54.2%) | `npm run distill` | [`jury.ts`](lib/engine/jury.ts) · [`distill.ts`](lib/engine/distill.ts) |
 | The judge's risk is bounded honestly | Clopper–Pearson upper bound on selective risk; the certificate's width is shown vs N — never a small-N headline | `npm run certify` | [`selective-risk.ts`](lib/engine/selective-risk.ts) |
 | The judge is a measured instrument | TPR/FPR, precision/recall, Cohen's κ vs human labels as Wilson intervals — **pending a key + labels** | `npm run calibrate` | [`judge-eval.ts`](lib/engine/judge-eval.ts) |
 | Externally grounded | **zero false positives** on the in-scope reference trajectories of τ²-bench's 164 real airline + retail tasks — a specificity check, not a benchmark score | `npm run bench:tau2` | [`bench/tau2/`](bench/tau2) |
-| CI re-proves all of it | typecheck · lint · tests · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness, on every push | — | [`ci.yml`](.github/workflows/ci.yml) |
+| CI re-proves the rows above it | typecheck · lint · tests · ledger audit · tamper drill · fuzz · eval · snapshot drift gate · build · install smoke · Inspect harness · a live local instance held to a fixture's verdict, on every push. **Not** re-run in CI: the equivalence, distillation and τ² rows above — those are on-demand commands, and their published numbers come from the last local run rather than from a job that would fail if they moved. | — | [`ci.yml`](.github/workflows/ci.yml) |
 
 ## Limitations & known failure modes
 

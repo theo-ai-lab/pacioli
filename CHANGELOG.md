@@ -11,8 +11,114 @@ the changes landed on `main`.
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-08-02) **The ledger's next-position allocator now fails closed and by
+  name.** `seq` is an int64 in the sqlite file and a JS number everywhere it is
+  read, so the store has an edge at `Number.MAX_SAFE_INTEGER` — and, measured on
+  copies of the committed reference ledger, it did three different things there,
+  none of them a refusal. With the highest position already past the range it
+  threw a bare `RangeError: Value is too large to be represented as a JavaScript
+  number` naming no ledger and no remedy. With the highest position *exactly* at
+  `Number.MAX_SAFE_INTEGER` it **resolved**: it allocated 2^53, wrote it, and
+  reported the receipt stored — after which the whole file stopped verifying, on
+  the very row it had just written (`malformed-row … outside the range a
+  position can be read in`), while `/api/reconcile` had already answered
+  `stored: true`. And with text in the position column (`MAX(seq)` is `'zzz'`,
+  `Number('zzz') + 1` is `NaN`, a bound `NaN` lands as `NULL`) it wrote a row
+  outside the order the chain is walked in, and reported that stored too. A
+  store that reports a save it has poisoned its own ledger with is worse than a
+  store that refuses. The allocator now reads `MAX(seq)` as TEXT — the same move
+  the verifier makes, so the read itself cannot fail before anything can be said
+  about it — and `nextPosition()` refuses with a named, located
+  `LedgerPositionError` carrying a typed `reason` (`malformed-max`,
+  `unreadable-max`, `exhausted`), the ledger's current highest position, and the
+  operator's next step. Nothing is written, `save()` rejects, `/api/reconcile`
+  answers `stored: false` and logs the line. Every position the allocator does
+  return is one the store can read again. Pinned on the real store API by three
+  cases and a seeded property over 24 generated maxima (the invariant: *the store
+  never leaves the ledger less verifiable than it found it, and never resolves
+  unless it wrote a position it can read again*), end to end at the HTTP surface
+  in `route.persistence.test.ts`, and against the file itself by a new
+  `malformed-seq-past-readable-range` drill class — in-model coverage goes from
+  33 classes / 264 cases to **34 classes · 272 cases · 272 caught · 0 escapes**.
+  `MAX_POSITION` now has one definition, shared by the writer and the verifier.
+  No schema change: `seq` stays an INTEGER, the leaf facts are untouched, and
+  `dataset/reference-ledger.db` verifies byte-identically (sha256
+  `896575ff…345f3`, unchanged).
+
+- (2026-08-01) The ledger verifier died instead of reporting when a row's `seq`
+  sat outside the safe-integer range. `seq` is a sqlite `INTEGER` (int64) read
+  into a JS number, and `node:sqlite` refuses to narrow a value wider than a
+  double — so the throw happened inside the row read, *before* any row existed
+  for the decode to inspect, and `verifyLedger()` threw rather than returning a
+  report. The CLI still exited non-zero (it catches at the top), but it printed
+  a bare `Value is too large to be represented as a JavaScript number` naming no
+  row, and any programmatic caller — the tamper drill runs its whole registry
+  through this function — would abort mid-run. The read is now caught and the
+  offending positions re-read as TEXT, so the fault is a **located**
+  `malformed-row` naming the receipt and the position. Reachable by anyone with
+  write access to the file (`UPDATE receipts SET seq = seq + 2^53`); it is a
+  denial of service on future appends, not a forgery, and both halves now fail
+  loudly rather than silently.
+
+- (2026-08-01) Seven escaping tamper classes — four distinct root causes — all
+  found by the tamper drill on its first run (51 escapes in 264 in-model cases) and all
+  instances of one API failure class: *a verification function that succeeds on
+  malformed input*. The verifier now fails closed on: a **duplicate or NULL `seq`** (the walk orders
+  by `seq`, so a tie was resolved by rowid and every link still held — while
+  `seq` is also what bounded retention deletes by, letting an attacker pick the
+  next prune's victim); a **negative or non-numeric `rootCount`**, which retired
+  a scope's Merkle commitment entirely because `NaN > n` is false and
+  `slice(0, -9)` returns `[]`; a **session scope committed to zero receipts**, a
+  claim nothing can contradict and one the store can never produce; and a
+  **non-canonical row encoding** — text in `deltaUsd` (`Number("n/a")` is NaN
+  and `canonicalJSON(NaN)` is `"null"`), padded `findingTypes`, or a verdict
+  outside `{0,1}` — which made the row→facts decode lossy, so two different
+  stored rows could share one leaf and "the leaf matches" stopped implying "the
+  row is what was committed".
+- (2026-06-12) Lockfile regenerated so `npm ci` validates across npm versions.
+
 ### Added
 
+- (2026-08-01) The two informational residuals of the ledger chain are now
+  **stated where a reader hits them, and pinned by execution**.
+  (1) `seq` is read but never committed to: the leaf covers nine immutable
+  facts and `seq` is not among them, so renumbering every position while
+  preserving their order is undetectable — and inert, because only the
+  *relative* order is load-bearing and the order is already committed to by
+  `prevHash`/`entryHash`. Established on copies of the committed reference
+  ledger: the renumbered file verifies with no faults, a real prune driven
+  through the store API afterwards destroys the same rows and spares the same
+  survivors, and every leaf, link, head and root is byte-identical; the only
+  value that moves is `chain_state.prunedSeq`, which nothing ever reads back as
+  a decision. Pinned by a new `boundary-seq-renumber` drill class and by two
+  seeded property tests over a space of 24 generated order-preserving
+  renumberings. **Recorded decision: `seq` is deliberately NOT added to the leaf
+  facts** — doing so changes every leaf hash in existence and stops the
+  committed `dataset/reference-ledger.db` verifying, to close an exposure that
+  cannot alter a verdict, a survivor set or a commitment.
+  (2) The re-seal boundary is now stated in one unmissable sentence in
+  [`docs/VERIFICATION.md`](docs/VERIFICATION.md) and in the README's claim
+  table: verification establishes the file's **internal self-consistency**, and
+  cannot establish, from the file alone, that nobody re-sealed the whole ledger
+  — telling those apart requires a commitment made before the rewrite and kept
+  outside the file. In-model drill coverage is unchanged (33 classes · 264
+  cases · 264 caught · 0 escapes); the pinned boundaries go from four to five.
+
+- (2026-08-01) Ledger tamper drill (`npm run drill:tamper`): a scripted
+  adversary with write access to the sqlite file mutates a **copy** of the
+  committed reference store one class at a time — edit, delete, reorder,
+  truncate, re-insert, forge, splice across scopes, blank the chain columns,
+  rewrite a scope's count/head/root/rootCount, malformed encodings — with
+  targets drawn from a seeded generator, and the invariant is that every one of
+  them fails verification. Held against a mandatory **negative control** (an
+  untampered copy must still verify) and four **pinned boundaries** that must
+  still verify because the file alone cannot cover them (`seenCount`, a full
+  re-seal, a wiped ledger, a prefix prune). **33 in-model classes · 264 cases ·
+  264 caught · 0 escapes**; CI runs the drill and regenerates
+  [`docs/TAMPER-DRILL.md`](docs/TAMPER-DRILL.md) under a byte-for-byte diff, so
+  an escape breaks the build.
 - (2026-07-10) Capture publish path (`npm run capture:publish`): projects the
   raw private capture corpus (`dataset/captured.jsonl`, gitignored) down to the
   contract fields only, runs every free-text field through a PII redactor
@@ -117,7 +223,3 @@ the changes landed on `main`.
   cross-origin batch caller example generalized in comments.
 - (2026-07-06) Deploy-parity workflow comments describe the probe list precisely
   (README-named routes plus the API routes the demo pages call).
-
-### Fixed
-
-- (2026-06-12) Lockfile regenerated so `npm ci` validates across npm versions.

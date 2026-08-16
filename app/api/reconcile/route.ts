@@ -82,11 +82,13 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof parsed === "object" && parsed !== null && Array.isArray((parsed as { claims?: unknown }).claims)) {
     const res = await reconcileBatch(parsed, { allowJudge });
     if (res.status === 200) {
-      // Persist every claim's receipt (best-effort — a store error never fails the response).
+      // Persist every claim's receipt. A partial batch is NOT stored: "some of them landed" is not a
+      // ledger entry the caller can rely on, so one failed write makes the whole batch stored:false.
+      let stored = false;
       try {
         const store = await getStore();
         for (const c of res.body.claims) {
-          store.save({
+          await store.save({
             receiptId: c.receiptId,
             receiptHash: c.receiptHash,
             balanced: c.balanced,
@@ -98,9 +100,11 @@ export async function POST(req: Request): Promise<Response> {
             sessionKey,
           } satisfies StoredReceipt);
         }
-      } catch {
-        /* best-effort persistence */
+        stored = true;
+      } catch (e) {
+        console.error("[pacioli] batch receipt persistence FAILED — responding stored:false", e);
       }
+      return json({ ...res.body, stored }, res.status);
     }
     return json(res.body, res.status);
   }
@@ -108,10 +112,13 @@ export async function POST(req: Request): Promise<Response> {
   // SINGLE path.
   const res = await reconcileEndpoint(parsed, { allowJudge });
   if (res.status === 200) {
-    // Persist to the durable store (best-effort — a store error never fails the response).
-    // Every field comes from the TYPED success body — no casts of raw input at the storage boundary.
+    // Persist to the durable store. The reconciliation itself is still valid if the write fails — the
+    // receipt is content-addressed and the caller can re-submit it — so this does not fail the
+    // response; it REPORTS. Every field comes from the TYPED success body, no casts of raw input at
+    // the storage boundary.
+    let stored = false;
     try {
-      (await getStore()).save({
+      await (await getStore()).save({
         receiptId: res.body.receiptId,
         receiptHash: res.body.receiptHash,
         balanced: res.body.balanced,
@@ -126,9 +133,11 @@ export async function POST(req: Request): Promise<Response> {
         // is untouched. Length-capped; absent header = the shared global ledger (prior behavior).
         sessionKey,
       });
-    } catch {
-      /* best-effort persistence */
+      stored = true;
+    } catch (e) {
+      console.error("[pacioli] receipt persistence FAILED — responding stored:false", e);
     }
+    return json({ ...res.body, stored }, res.status);
   }
 
   return json(res.body, res.status);

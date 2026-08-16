@@ -8,13 +8,18 @@
 # moves without a redeploy, this goes red and stays red until `npm run deploy` runs; a stale
 # demo is now a visible X instead of a silently wrong link in the README.
 #
-# Two checks against https://pacioliapp.vercel.app:
+# Three checks against https://pacioliapp.vercel.app:
 #   1. GET /api/version — the deployed sha must equal the commit this run is for.
 #   2. Every route the README names — plus the API routes the demo pages call — must answer
 #      with its expected status. POST-only routes are probed with GET so the probe has no side
 #      effects: an existing route answers 405 (method not allowed), a missing one 404s. 401 is
 #      accepted where a deploy-side PACIOLI_API_KEY would gate the route — present-but-keyed is
 #      parity, missing is not.
+#   3. The DATA check. A 200 proves nothing: a deployment can serve every route above and still
+#      reconcile wrongly. So a known fixture is posted at /api/reconcile and the VERDICT is
+#      asserted — flagged, OVERSPEND, deltaUsd +78.40, and the finding citing both the claim line
+#      and the evidence line. The same probe runs against a locally started instance in ci.yml, so
+#      the check itself is proven on every push and the deployed URL is only a variable (BASE).
 name: deploy-parity
 
 on:
@@ -25,7 +30,7 @@ on:
   workflow_dispatch: {} # for re-running by hand right after a redeploy
 
 permissions:
-  contents: none # pure HTTP probes; this workflow needs no checkout and no token
+  contents: read # only to check out the parity probe; the checks themselves are pure HTTP
 
 env:
   BASE: https://pacioliapp.vercel.app
@@ -86,3 +91,14 @@ jobs:
           probe /api/ingest 405
           probe /api/judge/stream 405
           exit $fail
+
+      # The check that a status code cannot make: does the deployment actually RECONCILE? A known
+      # fixture must come back flagged OVERSPEND with both citations. Zero-dependency plain node, so
+      # no install step is needed — and BASE is the only thing that points it at the live deploy
+      # rather than the local instance ci.yml runs it against.
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: The deployment returns the right VERDICT for a known fixture
+        run: node scripts/parity-probe.mjs

@@ -17,6 +17,20 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      # The tamper-evidence claim, re-proven every push against a committed reference store: the
+      # verifier walks its hash chain and per-scope Merkle roots and exits non-zero on the first
+      # mismatch. (Regenerate the fixture only through the store API — a hand-edited sqlite file
+      # cannot verify, which is the entire point.)
+      - run: npm run verify:ledger -- dataset/reference-ledger.db
+      # …and the adversarial half of the same claim: a scripted attacker mutates a COPY of that store
+      # 34 ways from a seeded generator (edit, delete, reorder, truncate, forge, re-insert, splice,
+      # malformed encodings, rewritten commitments) and the verifier must catch 100% of them. An
+      # ESCAPE — any tamper the verifier passes — exits non-zero, so a hole in the tamper-evidence
+      # story breaks the build instead of waiting to be noticed.
+      - run: npm run drill:tamper
+      # The published drill report is regenerated and held to a byte-for-byte diff, like the eval
+      # snapshot: a claim in docs/ that no longer reproduces is a claim that has rotted.
+      - run: npm run drill:tamper -- --report docs/TAMPER-DRILL.md && git diff --exit-code docs/TAMPER-DRILL.md
       - run: npm run fuzz # 50k mutated cases against the formal invariants
       - run: npm run eval # per-class precision/recall
       - run: npm run eval:snapshot && git diff --exit-code eval/RESULTS.md # frozen eval/RESULTS.md must reproduce byte-for-byte
@@ -36,6 +50,31 @@ jobs:
           node-version: "24"
       - run: npm ci --no-audit --no-fund
       - run: npm run smoke:install
+
+  parity-probe:
+    # The deploy-parity workflow's DATA check, proven here against a locally started instance on every
+    # push. Same script, same fixture; only BASE differs. That keeps "the deployment reconciles
+    # correctly" a check this repo can prove it owns, instead of one that only ever runs against a URL
+    # nobody can re-run — and it means a change that breaks the verdict reddens CI, not just parity.
+    name: a local instance returns the right verdict (deploy-parity's data check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Start the app and probe it
+        run: |
+          PACIOLI_DB="$RUNNER_TEMP/parity-receipts.db" PORT=3111 npm start &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null "http://127.0.0.1:3111/api/version" && break
+            sleep 1
+          done
+          BASE=http://127.0.0.1:3111 node scripts/parity-probe.mjs
+      - name: The receipt it just wrote is in a verifiable ledger
+        run: npm run verify:ledger -- "$RUNNER_TEMP/parity-receipts.db"
 
   inspect-eval:
     name: Inspect AI eval (citable harness)

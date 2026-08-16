@@ -1,9 +1,10 @@
 /**
  * Pacioli MCP server.
  *
- * Exposes the reconciliation engine as ONE read-only Model Context Protocol tool, so a live agent
- * (Claude Desktop, the Claude CLI, …) can call Pacioli mid-task to self-issue a receipt before/after it
- * claims an action — double-entry bookkeeping for agents, in the loop instead of only post-hoc.
+ * Exposes the reconciliation engine as three READ-ONLY Model Context Protocol tools
+ * (reconcile_claim, reconcile_pr, reconcile_stream), so a live agent (Claude Desktop, the Claude
+ * CLI, …) can call Pacioli mid-task to self-issue a receipt before/after it claims an action —
+ * double-entry bookkeeping for agents, in the loop instead of only post-hoc.
  *
  * Uses the production-current V1 SDK (@modelcontextprotocol/sdk), NOT the pre-alpha V2
  * (@modelcontextprotocol/server). Stdio transport: never write to stdout (logs go to stderr).

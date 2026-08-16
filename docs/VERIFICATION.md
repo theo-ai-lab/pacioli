@@ -86,8 +86,169 @@ seat fee + add-on") — closer to a black-box recorder than a tripwire
 Each receipt is content-addressed (SHA-256 over its claim, evidence, and verdict) and batched into
 a **Merkle audit trail**: one root commits to a session, and an inclusion proof shows a receipt
 belongs to it *without revealing the others* — selective transparency, no SNARK
-([`packages/engine/src/merkle.ts`](../packages/engine/src/merkle.ts)). Signed, hash-chained agent
-receipts are themselves prior art
+([`packages/engine/src/merkle.ts`](../packages/engine/src/merkle.ts)).
+
+**What that does and does not cover.** A content hash proves a receipt's contents match its id. On
+its own it proves nothing about the *ledger* those receipts sit in — a row edited, deleted or
+reordered straight against the database file would still hash correctly, because nothing committed
+to its position. So the durable store is a chain, not just a table
+([`lib/store/ledger-chain.ts`](../lib/store/ledger-chain.ts)): each persisted row carries a
+`leafHash` over its immutable facts, the `prevHash` of the row before it, and
+`entryHash = chainHash(prevHash, leafHash)`; each scope — the whole store, plus every session ledger
+— commits a count, a head, and a Merkle root over its leaves.
+
+> **What a verification establishes, in one sentence.** `npm run verify:ledger` proves that the file
+> in front of you is **internally self-consistent** — every row still hashes to the leaf committed for
+> it, every link holds, and every scope's count, head and Merkle root match the rows that survive —
+> and it **cannot, from the file alone, establish that nobody re-sealed the whole ledger**, because a
+> file rewritten end to end is internally self-consistent too. Telling those two apart requires a
+> commitment made *before* the rewrite and kept *outside* the file (an off-box copy of a root, or a
+> signature over one). Without such an anchor, a passing verification is a statement about integrity
+> since the last seal — not a statement about authorship.
+>
+> **That anchor now ships.** `npm run anchor:ledger -- <db> --out anchor.json` records the whole
+> store's head, root and count; `npm run verify:ledger -- <db> --anchor anchor.json` compares against
+> it and reports `anchor-mismatch` when the file is a valid record of a *different* history. The two
+> re-seal classes the drill pins as boundaries are caught this way, demonstrated end to end in
+> [`ledger-anchor.test.ts`](../lib/store/ledger-anchor.test.ts).
+>
+> The security lives in **custody, not in the code**: an anchor kept beside the database is taken by
+> whoever takes the database. What the code does guarantee is that the distinction is never silent —
+> an unanchored run prints `SELF-CONSISTENT … NOT ANCHORED` and sets `anchored: false` in the JSON
+> report, so a passing walk can no longer be read as a claim it never made. An unreadable anchor file
+> fails closed rather than degrading into an unanchored pass.
+
+| a change made directly to the sqlite file | caught by |
+|---|---|
+| a historical row edited in place | its `leafHash` no longer matches its contents |
+| a row deleted, or two rows reordered | the next row's `prevHash` no longer links |
+| the newest rows truncated | the scope's committed count and head |
+| a row inserted with forged chain values | both of the above |
+| a row inserted with the chain columns left empty | the rows carrying no commitment are RECOUNTED, never taken from the stored counter |
+| a session's whole ledger forged in | it has receipts but no committed chain state |
+| a session ledger committed to *zero* receipts | a scope can't commit to nothing: the store deletes a session's chain state when its last row goes |
+| two rows colliding on one sequence number | `seq` is the walk's order, so it must BE an order — otherwise the chain is checked against a tie-break |
+| a row stored in a non-canonical encoding (text in `deltaUsd`, padded `findingTypes`, a verdict outside `{0,1}`) | the row→facts decode is injective, so "the leaf matches" still implies "the row is what was committed" |
+| a committed counter that isn't a number (`rootCount = -9`, `rootCount = 'x'`) | counters are validated *before* anything is inferred from them — a check that can't be run FAILS, it is never skipped |
+| a position pushed outside the safe-integer range (`seq += 2^53`) | the row read fails before a row exists to decode, so the failure is caught and **located** — a verifier that dies is not a verifier that reports; the store's allocator refuses to write into that range too, by name |
+
+Covered honestly means covered *exactly*: the leaf commits to `receiptId`, `receiptHash`,
+`balanced`, `findingTypes`, `agent`, `merchant`, `deltaUsd`, `createdAt` and `sessionKey` — and to
+nothing else. Two columns of every stored row are outside it, both deliberately.
+
+The first is `seenCount`, the mutable replay counter that a re-submission bumps in place: the chain
+commits to the immutable facts of each distinct receipt, not to how many times one was replayed.
+
+The second is **`seq`, the row's position — and only its *relative order* is load-bearing.** `seq`
+orders the verifier's walk, orders a scope's leaves and picks a retention prune's victims, but every
+one of those uses is relative, and the relative order is already committed to by `prevHash`/
+`entryHash`. So renumbering every position while preserving their order (`UPDATE receipts SET seq =
+seq * 2`) is **undetectable — and inert**: measured on copies of the committed reference ledger, the
+renumbered file still verifies (`ok`, no faults), a real prune driven through the store API afterwards
+destroys the *same* rows and spares the *same* survivors, and every leaf, link, head and root is
+byte-identical to the pristine run. The only value that moves anywhere in the file is
+`chain_state.prunedSeq`, which is written, carried forward, and never read back as a decision by
+anything. A renumbering that does **not** preserve the order is a different attack and is caught
+(`chain-break`, or the strict-increase check that also rejects duplicate and NULL positions).
+
+**We consider that acceptable, and the reason is that no decision depends on the value.** It is
+asserted rather than assumed: `boundary-seq-renumber` pins it in the tamper drill, and two seeded
+property tests in [`ledger-chain.test.ts`](../lib/store/ledger-chain.test.ts) assert over a *space* of
+24 generated order-preserving renumberings that the ledger still verifies, that every commitment is
+unchanged, and that a real prune destroys exactly the same rows. **Decision, recorded rather than
+left silent: `seq` is deliberately NOT added to the leaf facts.** Doing so changes every leaf hash in
+existence — the committed `dataset/reference-ledger.db` stops verifying immediately (measured:
+`[row-altered] seq 1 (sha256:0f3c1a2b4d5e6f70)`) and every deployed store would need regenerating —
+to close an exposure that cannot alter a verdict, a survivor set, or a commitment. If a future change
+ever makes seq's absolute value load-bearing, those property tests go red and this paragraph gets
+rewritten instead of quietly going out of date.
+
+One place where "inert" stops: pushing a position past 2^53 while still preserving the order is a
+**denial of service, not a forgery**. `seq` is an int64 in the file but a JS number everywhere it is
+read, and `node:sqlite` will not narrow an integer that wide — so both halves have to fail loudly,
+and both now do.
+
+*Reading.* The verifier reports a *located* `malformed-row` naming the receipt and the position
+(the offenders are re-read as TEXT, which never crosses the number boundary), instead of dying with
+a bare `RangeError` that names nothing — a verifier that dies is not a verifier that reports. Pinned
+by the `malformed-seq-past-readable-range` drill class.
+
+*Appending.* The store allocates the next position through
+[`nextPosition()`](../lib/store/ledger-chain.ts), which reads `MAX(seq)` as TEXT and **refuses by
+name** — a `LedgerPositionError` carrying a typed `reason` (`malformed-max`, `unreadable-max`,
+`exhausted`), the ledger's current highest position, and the remedy — rather than failing by
+arithmetic accident. Nothing is written, `save()` rejects, and `/api/reconcile` answers
+`stored: false` with that line in the log. Every position it *does* return is one the store can read
+again: never a position past the readable range (`MAX(seq)` already at `Number.MAX_SAFE_INTEGER`
+used to allocate 2^53, write it, and report success — leaving a row the file could no longer verify),
+and never `NaN`, which binds into sqlite as `NULL` and would put a row outside the order the chain is
+walked in. Refused, the receipt is simply not stored: the ledger it declined to extend still verifies,
+and every receipt already in it still reads. Pinned on the real store API — three cases and a seeded
+property over 24 generated maxima — in [`ledger-chain.test.ts`](../lib/store/ledger-chain.test.ts),
+and end to end at the HTTP surface in
+[`route.persistence.test.ts`](../app/api/reconcile/route.persistence.test.ts).
+
+That is the honest split: integrity holds, availability is what an attacker with write access can
+take — and what they take is loud at both ends.
+
+Three further limits, stated rather than buried: receipts written *before* the chain
+existed carry no commitment and the verifier refuses to certify them instead of passing them
+silently; bounded retention legitimately prunes the oldest rows, so a prune is **recorded** (the
+chain keeps the last pruned entry as its anchor and the affected scopes re-seal) rather than left
+looking like an attack; and the chain proves *internal consistency*, not authorship — an attacker
+who can rewrite the whole file, chain and all, produces a self-consistent ledger. Detecting that
+needs an external anchor (an off-box copy of the root, or the optional ML-DSA-65 signature over it),
+which is why the roots are exposed rather than kept internal.
+
+Retention has a sharp edge worth naming, because it follows from the second and third limits
+together: an attacker who deletes the **oldest** receipts and re-anchors the chain the way a prune
+does is indistinguishable, *from the file alone*, from bounded retention doing its job — that is what
+it means for pruning to be legitimate. What still bounds it: the pruned range must be a **prefix**
+(nothing can be lifted out of the middle without breaking a link), and any off-box copy of an older
+root contradicts it immediately. All five boundaries — `seenCount`, an order-preserving `seq`
+renumbering, a full re-seal, a wiped ledger, and this prefix prune — are **pinned by the drill** as
+cases that must still verify, so if one ever starts failing, this paragraph gets rewritten
+deliberately instead of quietly going out of date.
+
+```bash
+npm run verify:ledger -- receipts.db      # exit 0 verified · exit 1 with the located fault
+```
+
+The verifier opens the database **read-only**, walks every link from genesis to head, and names the
+scope, sequence number and receipt id of the first fault
+([`lib/store/verify-ledger.ts`](../lib/store/verify-ledger.ts)). CI runs it on every push against a
+committed reference store (`dataset/reference-ledger.db`), so this is a continuously re-proven gate
+and not a one-time assertion.
+
+### The drill
+
+A verifier is only as good as the attacks it has actually been run against, and a list of example
+tests only ever contains the attacks its author thought of. So the claim is **drilled**: a scripted
+adversary with write access to the sqlite file mutates a *copy* of that same reference store, one
+tamper class at a time, with targets drawn from a seeded generator, and the invariant is that
+**every** one of them fails verification — held up against a **negative control** (an untampered copy
+must still verify), because a verifier that rejects everything proves nothing.
+
+```bash
+npm run drill:tamper                      # exit 0 all caught · exit 1 naming the escape
+```
+
+**34 in-model classes · 272 cases · 272 caught · 0 escapes**, re-run on every push and published as
+[`docs/TAMPER-DRILL.md`](TAMPER-DRILL.md), which CI regenerates and holds to a byte-for-byte diff.
+Adding a class to the registry in [`lib/store/tamper-drill.ts`](../lib/store/tamper-drill.ts) extends
+the invariant automatically.
+
+The drill is not decoration: on its first run it escaped in 51 of 264 in-model cases across seven classes,
+tracing to four root causes, all of them instances of one API failure mode — *a verification function
+that SUCCEEDS on malformed input*, the same class as the NULL-chain evasion that preceded it. A duplicate `seq` left every link
+holding (`ORDER BY seq` resolved the tie by rowid) while handing an attacker the choice of which row
+bounded retention deletes next; `rootCount = -9` or `'x'` retired a scope's Merkle commitment
+entirely, because `NaN > n` is false and `slice(0, -9)` quietly returns `[]`; and a lossy row decode
+let text in `deltaUsd`, padded `findingTypes` and a verdict outside `{0,1}` all hash as something
+else that was committed. Every one of those now fails closed, and the last four rows of the table
+above are the locks.
+
+Signed, hash-chained agent receipts are themselves prior art
 ([Pipelock](https://github.com/luckyPipewrench/pipelock), [Acta](https://github.com/VeritasActa/Acta),
 in-toto/Sigstore) — Pacioli's contribution is the *reconciliation* a receipt commits to, not the
 receipt format. See [`RELATED_WORK.md`](RELATED_WORK.md).
@@ -157,8 +318,8 @@ scoped — a specificity check, not a τ²-bench score; see [`bench/tau2/`](../b
 
 ### CI re-proves it
 
-A GitHub Actions workflow runs typecheck + lint + tests + fuzz + eval + build (and the Inspect
-harness) on every push — the eval is a regression gate, not a one-time claim. The eval snapshot
+A GitHub Actions workflow runs typecheck + lint + tests + ledger audit + fuzz + eval + build (plus
+the Inspect harness and the deploy-parity data probe against a locally started instance) on every push — the eval is a regression gate, not a one-time claim. The eval snapshot
 ([`eval/RESULTS.md`](../eval/RESULTS.md)) must reproduce byte-for-byte
 (`npm run eval:snapshot && git diff --exit-code eval/RESULTS.md`), and a separate job packs
 `@pacioli-app/engine`, installs the tarball into a fresh consumer directory, and holds the CLI to
@@ -179,9 +340,13 @@ a daily cost ceiling, and the response's `judgeMode` tells you the truth: `off`,
 `unavailable` (requested backend can't run — never disguised as "ran clean"), `error`, or the
 backend that ran. Note the split: `balanced` and `findings` are always the **deterministic**
 verdict (that is what the receipt hash commits to); judge results arrive separately as
-`judgeFindings` — if you enable a judge, gate on both. Bodies are byte-capped at the transport
-(413 past 64KB, even chunked). Errors: `400` bad JSON · `401` bad key · `413` too large ·
-`422` invalid shape · `429` judge rate-limited.
+`judgeFindings` — if you enable a judge, gate on both. A 200 also carries **`stored`**: whether the
+receipt reached the durable ledger. A failed write does not fail the reconciliation (the verdict
+stands, and the receipt is content-addressed so it can be re-submitted) but it is never hidden —
+`stored: false` means the ledger does **not** have this receipt, and on a batch it means *no claim in
+that batch* may be assumed filed. `POST /api/ingest` reports the same field. Bodies are byte-capped
+at the transport (413 past 64KB, even chunked). Errors: `400` bad JSON · `401` bad key ·
+`413` too large · `422` invalid shape · `429` judge rate-limited.
 
 ### Prometheus metrics
 
@@ -203,6 +368,15 @@ has no `.git` to ask). A separate
 [deploy-parity workflow](../.github/workflows/deploy-parity.yml) curls the live demo on every
 push to `main` and weekly: a deployed sha that isn't `main`, or any route the README names going
 missing, is a red X — a stale deploy can't silently falsify the demo links.
+
+That much is still only status codes, and **a 200 proves nothing** — a deployment can serve every
+route above and reconcile wrongly. So parity is also asserted on **data**: the workflow posts a known
+fixture at `POST /api/reconcile` and holds the answer to the verdict that fixture must produce —
+flagged, `OVERSPEND`, `deltaUsd` +78.40, and the finding citing *both* the claim line and the
+evidence line ([`scripts/parity-probe.mjs`](../scripts/parity-probe.mjs)). The deployed URL is just
+`BASE`: CI runs the identical probe against a locally started instance on every push, and a unit test
+ties the fixture's expected verdict to what the engine actually produces, so the assertion can't
+drift into checking a guess.
 
 ### CI gate (SARIF / JUnit)
 
