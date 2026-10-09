@@ -47,7 +47,7 @@ export default function MethodsPage() {
         <p className="mt-5 font-serif text-[19px] italic leading-relaxed text-cream/80">
           “What the agent claimed” versus “what actually happened” is prediction versus ground truth. So the
           reconciliation engine isn&rsquo;t something an eval is bolted onto — it <em>is</em> the eval. Here is the
-          labeled set, the per-class numbers, the weak spots I didn&rsquo;t hide, and the one command that
+          labeled set, the per-class numbers, known limitations, and the one command that
           reproduces all of it.
         </p>
 
